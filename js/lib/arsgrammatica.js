@@ -483,8 +483,9 @@
 
     var styleLines = [];
     if (colorByVerbalUnit) {
-      var assignment = assignVerbalUnits(tokenSlice);
-      var colorResult = assignVerbalUnitColors(graphTokens, assignment);
+      var verbalUnitColoring = computeVerbalUnitColoring(tokenSlice, excludeTokenTypes);
+      var assignment = verbalUnitColoring.assignment;
+      var colorResult = verbalUnitColoring.colorResult;
       warnings = warnings.concat(colorResult.warnings);
 
       colorResult.order.forEach(function (unitKey, unitIndex) {
@@ -730,6 +731,133 @@
     return { colors: colors, order: order, warnings: warnings };
   }
 
+  /**
+   * Compute a verbal-unit color assignment for `tokenSlice`, shared by
+   * sentenceMermaidGraph and sentenceHtml so that the same sentence
+   * (rendered with the same `excludeTokenTypes`) always gets the same
+   * unit-to-color mapping in both views.
+   *
+   * @param {Object[]} tokenSlice - full, unfiltered sentence token slice.
+   * @param {string[]} excludeTokenTypesLower - lower-cased tokentype
+   *   values that don't count toward first-appearance color ordering
+   *   (a token of one of these types can still end up colored, if some
+   *   *other*, non-excluded token already established that unit's
+   *   color first).
+   * @returns {{assignment: Map<string,string|null>, colorResult: {colors: Map, order: string[], warnings: string[]}}}
+   */
+  function computeVerbalUnitColoring(tokenSlice, excludeTokenTypesLower) {
+    var assignment = assignVerbalUnits(tokenSlice);
+    var orderingTokens = tokenSlice.filter(function (token) {
+      return excludeTokenTypesLower.indexOf((token.tokentype || '').toLowerCase()) === -1;
+    });
+    var colorResult = assignVerbalUnitColors(orderingTokens, assignment);
+    return { assignment: assignment, colorResult: colorResult };
+  }
+
+  // ---------------------------------------------------------------------
+  // Rendering a sentence's text as HTML, colored by verbal unit
+  // ---------------------------------------------------------------------
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  /**
+   * Build an HTML rendering of a sentence's "black text" -- the same
+   * surface-text join sentenceText produces -- with each token whose
+   * verbal unit could be resolved wrapped in a colored `<span>`, using
+   * the same clustering and palette as sentenceMermaidGraph's own
+   * `colorByVerbalUnit` coloring. Pass the same `excludeTokenTypes` to
+   * both functions (or leave both at their shared `["punctuation"]`
+   * default) and the same verbal unit gets the same color in both a
+   * sentence's graph and its text view.
+   *
+   * Each colored span carries both an inline `style` (so the coloring
+   * works immediately with no host CSS -- consistent with this
+   * library's "just open the HTML file" design, see
+   * notes/library-api.md) and a `class="vu vuN"` (so a host page can
+   * restyle by unit instead, if it wants to; `N` matches the `vuN`
+   * class sentenceMermaidGraph's own `classDef`/`class` lines use for
+   * the same unit in the graph view). A token whose verbal unit
+   * couldn't be resolved (no reachable anchor -- see
+   * assignVerbalUnits) is rendered as plain, unwrapped text, as is
+   * every token when `colorByVerbalUnit` is false.
+   *
+   * @param {Object[]} tokenSlice - full ordered token slice for one
+   *   sentence, e.g. as returned by tokensForSentence. Must be non-empty.
+   * @param {{noSpaceBefore?: function(Object, Object=): boolean, excludeTokenTypes?: string[], colorByVerbalUnit?: boolean}} [options] -
+   *   `noSpaceBefore` is the same spacing hook sentenceText accepts.
+   *   `excludeTokenTypes` (default `["punctuation"]`) does *not* remove
+   *   any token from the rendered text -- every token in `tokenSlice`
+   *   is shown, same as sentenceText -- it only controls which tokens
+   *   count toward first-appearance color ordering, matching
+   *   sentenceMermaidGraph's own option of the same name.
+   *   `colorByVerbalUnit` (default true) set to false renders plain,
+   *   HTML-escaped text with no coloring at all.
+   * @returns {{html: string, warnings: string[]}} `html` is an HTML
+   *   fragment with no wrapping element of its own -- insert it into
+   *   any container via `.innerHTML`; `warnings` mirrors
+   *   sentenceMermaidGraph's (more distinct verbal units were found
+   *   than the palette has colors for).
+   */
+  function sentenceHtml(tokenSlice, options) {
+    options = options || {};
+    if (!tokenSlice || tokenSlice.length === 0) {
+      throw new Error('sentenceHtml: token slice is empty');
+    }
+
+    var noSpaceBefore = options.noSpaceBefore || defaultNoSpaceBefore;
+    var colorByVerbalUnit = options.colorByVerbalUnit !== false;
+    var excludeTokenTypes = (options.excludeTokenTypes || DEFAULT_EXCLUDED_TOKEN_TYPES).map(function (t) {
+      return String(t).toLowerCase();
+    });
+
+    var assignment = null;
+    var colorResult = null;
+    var warnings = [];
+    if (colorByVerbalUnit) {
+      var coloring = computeVerbalUnitColoring(tokenSlice, excludeTokenTypes);
+      assignment = coloring.assignment;
+      colorResult = coloring.colorResult;
+      warnings = colorResult.warnings;
+    }
+
+    var html = '';
+    var previous = null;
+    tokenSlice.forEach(function (token) {
+      var text = token.text || '';
+      if (text === '') {
+        return;
+      }
+      if (!noSpaceBefore(token, previous)) {
+        html += ' ';
+      }
+
+      var escaped = escapeHtml(text);
+      var unitKey = colorByVerbalUnit ? assignment.get(tokenKey(token.context, token.id)) : null;
+      var color = unitKey ? colorResult.colors.get(unitKey) : null;
+
+      if (color) {
+        var className = 'vu' + colorResult.order.indexOf(unitKey);
+        html +=
+          '<span class="vu ' + className + '" style="background-color:' + color.fill +
+          ';color:' + color.text + ';border:1px solid ' + color.stroke +
+          ';border-radius:3px;padding:0 0.15em;">' + escaped + '</span>';
+      } else {
+        html += escaped;
+      }
+
+      previous = token;
+    });
+
+    return { html: html, warnings: warnings };
+  }
+
   // ---------------------------------------------------------------------
 
   var ArsGrammatica = {
@@ -748,7 +876,8 @@
     assignVerbalUnitColors: assignVerbalUnitColors,
     verbalUnitPalette: VERBAL_UNIT_PALETTE.map(function (c) {
       return { fill: c.fill, stroke: c.stroke, text: c.text };
-    })
+    }),
+    sentenceHtml: sentenceHtml
   };
 
   global.ArsGrammatica = ArsGrammatica;

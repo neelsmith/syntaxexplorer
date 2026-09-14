@@ -3,9 +3,10 @@
  *
  * Wires up the page in index.html to the reusable js/lib/*.js library:
  * reads a locally-selected arsgrammatica analysis file, builds a menu
- * of its sentences, shows the "black text" view of whichever sentence
- * the user selects, and renders that sentence's dependency relations
- * as a pannable, zoomable Mermaid graph.
+ * of its sentences, shows the "black text" of whichever sentence the
+ * user selects (colored by verbal unit via ArsGrammatica.sentenceHtml),
+ * and renders that sentence's dependency relations as a pannable,
+ * zoomable Mermaid graph, colored by the same verbal units.
  *
  * This file is intentionally app-specific (DOM wiring only); all of
  * the file-format, text-rendering, and graph-building logic lives in
@@ -139,7 +140,7 @@
     var sentence = sentences[i];
     try {
       var slice = ArsGrammatica.tokensForSentence(tokens, sentence, tokenIndex);
-      viewEl.textContent = ArsGrammatica.sentenceText(slice);
+      renderSentenceView(slice);
       currentSlice = slice;
       renderGraph(slice);
     } catch (err) {
@@ -156,6 +157,19 @@
       renderGraph(currentSlice);
     }
   });
+
+  function renderSentenceView(slice) {
+    // Colored by verbal unit, using the same clustering/palette as the
+    // dependency graph below (sentenceMermaidGraph's own coloring), so
+    // the same clause reads as the same color in both views.
+    var textResult = ArsGrammatica.sentenceHtml(slice);
+    viewEl.innerHTML = textResult.html;
+    if (textResult.warnings.length > 0) {
+      textResult.warnings.forEach(function (warning) {
+        console.warn('sentenceHtml: ' + warning);
+      });
+    }
+  }
 
   function renderGraph(slice) {
     if (typeof mermaid === 'undefined') {

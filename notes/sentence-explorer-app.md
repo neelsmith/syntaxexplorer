@@ -30,8 +30,13 @@ wherever those end up.
    first 4 tokens + `…` if the sentence is longer) — exactly the label
    format the project calls for.
 4. Selecting a sentence computes its full token slice with
-   `ArsGrammatica.tokensForSentence`, shows the full black-text view
-   from `ArsGrammatica.sentenceText`, and renders its dependency graph.
+   `ArsGrammatica.tokensForSentence`, shows its full black-text view —
+   via `ArsGrammatica.sentenceHtml`, so each word is colored by the
+   verbal unit (clause-like subtree) it belongs to, using the exact
+   same clustering and palette as the dependency graph below, not
+   `ArsGrammatica.sentenceText` directly (that still underlies it: the
+   wording and spacing are identical, just wrapped in colored `<span>`s
+   — see notes/library-api.md) — and renders its dependency graph.
 5. Below that — in its own full-width row, not squeezed into a column
    next to the sentence menu — a "Dependency graph" section has an
    orientation picker (Bottom-to-top/BT, the default, Top-to-bottom/TB,

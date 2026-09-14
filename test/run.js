@@ -404,4 +404,84 @@ check('assignVerbalUnitColors can be called directly on a token list and an assi
   assert.deepStrictEqual(colorResult.colors.get(key), { fill: '#82bbff', stroke: '#2a78d6', text: '#000000' });
 });
 
+// -- sentenceHtml (colored-by-verbal-unit text view) --------------------
+
+check('sentenceHtml matches sentenceText\'s wording and spacing exactly, once tags are stripped', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var plainText = ArsGrammatica.sentenceText(slice);
+  var htmlResult = ArsGrammatica.sentenceHtml(slice);
+  var stripped = htmlResult.html.replace(/<[^>]+>/g, '');
+  assert.strictEqual(stripped, plainText);
+});
+
+check('sentenceHtml rejects an empty token slice', function () {
+  assert.throws(function () {
+    ArsGrammatica.sentenceHtml([]);
+  }, /token slice is empty/);
+});
+
+check('sentenceHtml wraps every token of a single-clause sentence in the same vu0 span', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = ArsGrammatica.sentenceHtml(slice).html;
+  ['Arma', 'virum', 'que', 'cano'].forEach(function (text) {
+    var re = new RegExp('<span class="vu vu0" style="background-color:#82bbff;color:#000000;border:1px solid #2a78d6;[^"]*">' + text + '</span>');
+    assert.ok(re.test(html), 'missing colored span for "' + text + '" in:\n' + html);
+  });
+  // the trailing period has no relatedN of its own, so it should be
+  // plain, unwrapped text, not a span
+  assert.ok(/>\.$|\.$/.test(html.trim()), 'expected the sentence to end in a bare, unwrapped period:\n' + html);
+  assert.strictEqual((html.match(/<span/g) || []).length, 4, 'expected exactly 4 colored spans (period excluded):\n' + html);
+});
+
+check('sentenceHtml colors match sentenceMermaidGraph\'s colors for the same sentence', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = ArsGrammatica.sentenceHtml(slice).html;
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  assert.ok(graph.indexOf('classDef vu0 fill:#82bbff,stroke:#2a78d6,color:#000000;') !== -1, graph);
+  assert.ok(html.indexOf('background-color:#82bbff;color:#000000;border:1px solid #2a78d6') !== -1, html);
+});
+
+check('colorByVerbalUnit: false on sentenceHtml renders plain, unwrapped, HTML-escaped text', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = ArsGrammatica.sentenceHtml(slice, { colorByVerbalUnit: false }).html;
+  assert.strictEqual(html.indexOf('<span'), -1, html);
+  assert.strictEqual(html, 'Arma virumque cano.');
+});
+
+check('sentenceHtml HTML-escapes token text so it cannot inject markup', function () {
+  var slice = [
+    { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: '<b>&"\'</b>' }
+  ];
+  var html = ArsGrammatica.sentenceHtml(slice).html;
+  assert.strictEqual(html.indexOf('<b>'), -1, html);
+  assert.ok(html.indexOf('&lt;b&gt;&amp;&quot;&#39;&lt;/b&gt;') !== -1, html);
+});
+
+check('sentenceHtml: a token with no reachable verbal-unit anchor is rendered as plain, unwrapped text', function () {
+  var slice = [
+    { context: VU_CONTEXT, id: 't0', tokentype: 'lexical', text: 'anchored', verbalunit: 't0' },
+    { context: VU_CONTEXT, id: 't1', tokentype: 'lexical', text: 'unanchored' }
+  ];
+  var html = ArsGrammatica.sentenceHtml(slice).html;
+  assert.strictEqual((html.match(/<span/g) || []).length, 1, html);
+  assert.ok(html.indexOf('>unanchored<') === -1 && / unanchored$/.test(html), 'expected "unanchored" to appear as bare trailing text:\n' + html);
+});
+
+check('sentenceHtml surfaces the same >8-verbal-units warning as sentenceMermaidGraph', function () {
+  var slice = [];
+  for (var i = 0; i < 9; i++) {
+    slice.push({ context: VU_CONTEXT, id: 't' + i, tokentype: 'lexical', text: 'w' + i, verbalunit: 't' + i });
+  }
+  var result = ArsGrammatica.sentenceHtml(slice);
+  assert.strictEqual(result.warnings.length, 1);
+  assert.ok(/9 verbal units but only 8 distinct colors/.test(result.warnings[0]), result.warnings[0]);
+});
+
+check('sentenceHtml respects a custom noSpaceBefore option, same as sentenceText', function () {
+  var alwaysSpace = function () { return false; };
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = ArsGrammatica.sentenceHtml(slice, { noSpaceBefore: alwaysSpace, colorByVerbalUnit: false }).html;
+  assert.strictEqual(html, ' Arma virum que cano .');
+});
+
 console.log('\n' + passed + ' check(s) passed.');

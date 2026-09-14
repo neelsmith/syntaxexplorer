@@ -136,6 +136,38 @@ the source text; see the two-context sentence in
   future version should special-case trailing punctuation, that's a
   deliberate change to make there, not an oversight here.
 
+- `ArsGrammatica.sentenceHtml(tokenSlice, {noSpaceBefore?, excludeTokenTypes=['punctuation'], colorByVerbalUnit=true})` —
+  the same "black text" join as `sentenceText`, but returned as
+  `{html, warnings}`: an HTML fragment (no wrapping element of its own
+  — insert it into a container via `.innerHTML`) with each token whose
+  verbal unit could be resolved wrapped in a colored `<span>`. This
+  uses *exactly* the same clustering (`assignVerbalUnits`) and 8-color
+  palette as `sentenceMermaidGraph`'s own `colorByVerbalUnit` coloring
+  (see below), so pass the same `excludeTokenTypes` to both functions
+  for the same sentence — or leave both at the shared `["punctuation"]`
+  default — and a clause reads as the same color in its graph and its
+  text view. `warnings` mirrors `sentenceMermaidGraph`'s (more distinct
+  verbal units than the 8-color palette has colors for).
+
+  Each colored span carries both an inline `style` (fill/text/border
+  colors from the palette, so it looks right immediately with no host
+  CSS — consistent with this library's "just open the HTML file"
+  design) and a `class="vu vuN"` (`N` matching the same unit's `vuN`
+  class in the Mermaid `classDef`/`class` lines), so a host page can
+  restyle by unit via CSS instead, if it wants to. `excludeTokenTypes`
+  here does *not* remove any token from the rendered text — unlike
+  `sentenceMermaidGraph`, every token in `tokenSlice` is always shown,
+  same as `sentenceText` — it only controls which tokens count toward
+  first-appearance color ordering, so it can match
+  `sentenceMermaidGraph`'s own option of the same name for the same
+  sentence. Pass `colorByVerbalUnit: false` for plain, HTML-escaped
+  text with no `<span>`s at all — still HTML-safe, just uncolored.
+
+  `apps/sentence-explorer` uses this instead of `sentenceText` for its
+  "Sentence text" panel, so the same coloring the dependency graph uses
+  is visible directly on the sentence's own running text — see
+  notes/sentence-explorer-app.md.
+
 ### Rendering a sentence's dependency relations as a graph
 
 - `ArsGrammatica.sentenceMermaidGraph(tokenSlice, {orientation='BT', excludeTokenTypes=['punctuation'], colorByVerbalUnit=true})` —
@@ -205,6 +237,9 @@ arsgrammatica's own Python `mermaid.py`
 (https://github.com/neelsmith/arsgrammatica) — so a diagram built here
 looks the same as one built there. Pass `colorByVerbalUnit: false` to
 skip coloring and leave every node with Mermaid's default styling.
+`ArsGrammatica.sentenceHtml` (above, under "Rendering text") applies
+this exact same clustering and palette to a sentence's running text, so
+a clause's color matches between its graph and its text view.
 
 The clustering itself is exposed as two standalone functions, so an
 app can compute verbal-unit membership or colors without going through
