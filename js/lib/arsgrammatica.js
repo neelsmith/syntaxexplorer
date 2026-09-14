@@ -396,12 +396,25 @@
    * flag a sentence's syntactic root, or because it names a token that
    * was excluded — is left out rather than fabricating a node for it.
    *
+   * When `colorByVerbalUnit` is true (the default), nodes are also
+   * colored by the "verbal unit" subtree they belong to -- see
+   * `assignVerbalUnits`, below -- using the same clustering rule and
+   * pastel palette as arsgrammatica's own Python `mermaid.py`
+   * (https://github.com/neelsmith/arsgrammatica), so a diagram built
+   * here matches one built there. Pass `colorByVerbalUnit: false` to
+   * skip coloring and leave every node with Mermaid's default styling.
+   *
    * @param {Object[]} tokenSlice - full ordered token slice for one
    *   sentence, e.g. as returned by tokensForSentence. Must be non-empty.
-   * @param {{orientation?: string, excludeTokenTypes?: string[]}} [options] -
+   * @param {{orientation?: string, excludeTokenTypes?: string[], colorByVerbalUnit?: boolean}} [options] -
    *   orientation is one of "TB", "BT" (default), "LR", "RL".
    *   excludeTokenTypes defaults to ["punctuation"].
-   * @returns {string} a complete Mermaid `graph` definition.
+   *   colorByVerbalUnit defaults to true.
+   * @returns {{diagram: string, warnings: string[]}} `diagram` is a
+   *   complete Mermaid `graph` definition; `warnings` lists any
+   *   non-fatal issues noticed while building it (currently: more
+   *   distinct verbal units were found than the palette has colors
+   *   for, so some units share a color).
    */
   function sentenceMermaidGraph(tokenSlice, options) {
     options = options || {};
@@ -415,6 +428,9 @@
     if (!tokenSlice || tokenSlice.length === 0) {
       throw new Error('sentenceMermaidGraph: token slice is empty');
     }
+
+    var colorByVerbalUnit = options.colorByVerbalUnit !== false;
+    var warnings = [];
 
     var excludeTokenTypes = (options.excludeTokenTypes || DEFAULT_EXCLUDED_TOKEN_TYPES).map(function (t) {
       return String(t).toLowerCase();
@@ -465,11 +481,253 @@
       });
     });
 
-    var body = nodeLines.concat(edgeLines)
-      .map(function (line) { return '  ' + line; })
+    var styleLines = [];
+    if (colorByVerbalUnit) {
+      var assignment = assignVerbalUnits(tokenSlice);
+      var colorResult = assignVerbalUnitColors(graphTokens, assignment);
+      warnings = warnings.concat(colorResult.warnings);
+
+      colorResult.order.forEach(function (unitKey, unitIndex) {
+        var color = colorResult.colors.get(unitKey);
+        var className = 'vu' + unitIndex;
+        var memberNodeIds = [];
+        graphTokens.forEach(function (token, i) {
+          if (assignment.get(tokenKey(token.context, token.id)) === unitKey) {
+            memberNodeIds.push('n' + i);
+          }
+        });
+        if (memberNodeIds.length === 0) {
+          return;
+        }
+        styleLines.push(
+          'classDef ' + className + ' fill:' + color.fill + ',stroke:' + color.stroke + ',color:' + color.text + ';'
+        );
+        styleLines.push('class ' + memberNodeIds.join(',') + ' ' + className + ';');
+      });
+    }
+
+    var bodyLines = nodeLines.concat(edgeLines);
+    if (styleLines.length > 0) {
+      bodyLines.push('');
+      bodyLines = bodyLines.concat(styleLines);
+    }
+
+    var body = bodyLines
+      .map(function (line) { return line === '' ? '' : '  ' + line; })
       .join('\n');
 
-    return 'graph ' + orientation + '\n' + body + '\n';
+    return {
+      diagram: 'graph ' + orientation + '\n' + body + '\n',
+      warnings: warnings
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // Clustering tokens into "verbal units", and coloring them
+  // ---------------------------------------------------------------------
+  //
+  // A "verbal unit" is a clause-like subtree of a sentence's tokens,
+  // anchored by the one token whose own `verbalunit` field names its
+  // own id (arsgrammatica marks exactly one token per clause this way).
+  // Every other token in that clause belongs to the same unit, found by
+  // walking its `related1`/`related2` chain up to that anchor.
+  //
+  // This is a port of `assign_verbal_units` and
+  // `assign_verbal_unit_colors` in arsgrammatica's own Python
+  // `arsgrammatica/verbal_units.py`
+  // (https://github.com/neelsmith/arsgrammatica), adapted to this
+  // library's `tokenKey(context, id)` convention in place of Python's
+  // flat, globally-unique `id` lookup -- our token ids are only unique
+  // within their own `context`, the same adaptation `sentenceMermaidGraph`
+  // itself already makes for `relatedN` resolution, above. Two
+  // deliberate "wrinkles" from the Python original are preserved:
+  //
+  //   - "unit verb" reverse link: a clause's own verb can explicitly
+  //     claim a connective token (e.g. a relative pronoun or
+  //     subordinating conjunction) as a member of its own clause by
+  //     pointing *at* it with relationship "unit verb" -- overriding
+  //     whatever that connective token's own relatedN chain would
+  //     otherwise resolve to (often a token in a *different*, governing
+  //     clause).
+  //   - ablative absolute: a token pointed at by a "circumstantial
+  //     participle" relationship resolves through that participle
+  //     instead of its own relatedN chain, but only when the token
+  //     itself also carries an "ablative absolute" relationship (on
+  //     either related1/relationship1 or related2/relationship2);
+  //     otherwise it falls through to the normal relatedN walk.
+  //
+  // Both wrinkles exist because a subordinate clause's connective word
+  // frequently has its *own* outgoing relation pointing into the clause
+  // it's subordinate *to*, not the clause it introduces, so resolving
+  // strictly "outward" via relatedN would put it in the wrong unit.
+  //
+  // Deliberately out of scope (present in the Python original but not
+  // requested here, and with no equivalent in this library's simpler
+  // graph): "implied token" amber styling/shape, `rank_by_depth`
+  // invisible depth-alignment links, `aat_depth`-based filtering, and a
+  // dedicated `show_root` root node.
+
+  var UNIT_VERB = 'unit verb';
+  var CIRCUMSTANTIAL_PARTICIPLE = 'circumstantial participle';
+  var ABLATIVE_ABSOLUTE = 'ablative absolute';
+
+  // 8 pastel {fill, stroke} pairs (with black node text), in the exact
+  // order arsgrammatica's own `_VERBAL_UNIT_PALETTE` uses, so a diagram
+  // built here matches one built with the Python library.
+  var VERBAL_UNIT_PALETTE = [
+    { fill: '#82bbff', stroke: '#2a78d6', text: '#000000' }, // blue
+    { fill: '#ffa682', stroke: '#eb6834', text: '#000000' }, // orange
+    { fill: '#70ffcc', stroke: '#1baf7a', text: '#000000' }, // aqua
+    { fill: '#ffd170', stroke: '#eda100', text: '#000000' }, // yellow
+    { fill: '#ff94bc', stroke: '#e87ba4', text: '#000000' }, // magenta
+    { fill: '#7aff7a', stroke: '#008300', text: '#000000' }, // green
+    { fill: '#a494ff', stroke: '#4a3aa7', text: '#000000' }, // violet
+    { fill: '#ff9594', stroke: '#e34948', text: '#000000' }  // red
+  ];
+
+  /**
+   * Resolve every token in `tokenSlice` to the "verbal unit" it belongs
+   * to, per the algorithm and wrinkles documented above.
+   *
+   * @param {Object[]} tokenSlice - full ordered token slice for one
+   *   sentence (not pre-filtered by tokentype: resolution may need to
+   *   walk through a token that would otherwise be excluded from the
+   *   graph, e.g. punctuation).
+   * @returns {Map<string, string|null>} maps each token's `tokenKey`
+   *   (see the internal `tokenKey(context, id)` helper) to the
+   *   `tokenKey` of the anchor token whose verbal unit it belongs to,
+   *   or `null` if it couldn't be resolved (no anchor was reachable,
+   *   e.g. because of a relation cycle with no anchor in it).
+   */
+  function assignVerbalUnits(tokenSlice) {
+    var byKey = new Map();
+    tokenSlice.forEach(function (token) {
+      byKey.set(tokenKey(token.context, token.id), token);
+    });
+
+    // introducesClauseFor(target) / circumstantialParticipleFor(target)
+    // map a target token's key to the key of a token that points *at*
+    // it with relationship "unit verb" / "circumstantial participle"
+    // respectively.
+    var introducesClauseFor = new Map();
+    var circumstantialParticipleFor = new Map();
+
+    tokenSlice.forEach(function (token) {
+      var ownKey = tokenKey(token.context, token.id);
+      [['related1', 'relationship1'], ['related2', 'relationship2']].forEach(function (pair) {
+        var related = (token[pair[0]] || '').trim();
+        var label = (token[pair[1]] || '').trim();
+        if (related === '' || related === 'root') {
+          return;
+        }
+        var targetKey = tokenKey(token.context, related);
+        if (label === UNIT_VERB) {
+          introducesClauseFor.set(targetKey, ownKey);
+        } else if (label === CIRCUMSTANTIAL_PARTICIPLE) {
+          circumstantialParticipleFor.set(targetKey, ownKey);
+        }
+      });
+    });
+
+    var resolved = new Map();
+    var inProgress = new Set();
+
+    function resolve(key) {
+      if (resolved.has(key)) {
+        return resolved.get(key);
+      }
+      var token = byKey.get(key);
+      if (!token) {
+        return null;
+      }
+      var ownVerbalUnit = (token.verbalunit || '').trim();
+      if (ownVerbalUnit !== '') {
+        var anchorKey = tokenKey(token.context, ownVerbalUnit);
+        resolved.set(key, anchorKey);
+        return anchorKey;
+      }
+      if (inProgress.has(key)) {
+        return null; // relation cycle with no anchor reached; bail out
+      }
+      inProgress.add(key);
+
+      var result = null;
+      var clauseVerbKey = introducesClauseFor.get(key);
+      if (clauseVerbKey !== undefined) {
+        result = resolve(clauseVerbKey);
+      }
+      if (result === null) {
+        var participleKey = circumstantialParticipleFor.get(key);
+        var isAblativeAbsolute =
+          (token.relationship1 || '').trim() === ABLATIVE_ABSOLUTE ||
+          (token.relationship2 || '').trim() === ABLATIVE_ABSOLUTE;
+        if (participleKey !== undefined && isAblativeAbsolute) {
+          result = resolve(participleKey);
+        }
+      }
+      if (result === null) {
+        [['related1'], ['related2']].some(function (pair) {
+          var related = (token[pair[0]] || '').trim();
+          if (related === '' || related === 'root') {
+            return false;
+          }
+          result = resolve(tokenKey(token.context, related));
+          return result !== null;
+        });
+      }
+
+      inProgress.delete(key);
+      resolved.set(key, result);
+      return result;
+    }
+
+    var assignment = new Map();
+    tokenSlice.forEach(function (token) {
+      var key = tokenKey(token.context, token.id);
+      assignment.set(key, resolve(key));
+    });
+    return assignment;
+  }
+
+  /**
+   * Assign a palette color to each distinct verbal unit found among
+   * `orderedTokens` (typically the tokens that will actually become
+   * graph nodes), in first-appearance order, cycling through the
+   * palette if there are more units than colors.
+   *
+   * @param {Object[]} orderedTokens - tokens in display order.
+   * @param {Map<string, string|null>} assignment - as returned by
+   *   assignVerbalUnits, called with the *full*, unfiltered sentence
+   *   slice so resolution can walk through tokens that aren't in
+   *   orderedTokens.
+   * @returns {{colors: Map<string,{fill:string,stroke:string,text:string}>, order: string[], warnings: string[]}}
+   */
+  function assignVerbalUnitColors(orderedTokens, assignment) {
+    var order = [];
+    var seen = new Set();
+    orderedTokens.forEach(function (token) {
+      var key = tokenKey(token.context, token.id);
+      var unitKey = assignment.get(key);
+      if (unitKey && !seen.has(unitKey)) {
+        seen.add(unitKey);
+        order.push(unitKey);
+      }
+    });
+
+    var warnings = [];
+    if (order.length > VERBAL_UNIT_PALETTE.length) {
+      warnings.push(
+        order.length + ' verbal units but only ' + VERBAL_UNIT_PALETTE.length +
+          ' distinct colors -- colors repeat and may be ambiguous between units'
+      );
+    }
+
+    var colors = new Map();
+    order.forEach(function (unitKey, i) {
+      colors.set(unitKey, VERBAL_UNIT_PALETTE[i % VERBAL_UNIT_PALETTE.length]);
+    });
+
+    return { colors: colors, order: order, warnings: warnings };
   }
 
   // ---------------------------------------------------------------------
@@ -485,7 +743,12 @@
     defaultNoSpaceBefore: defaultNoSpaceBefore,
     sentenceMermaidGraph: sentenceMermaidGraph,
     validGraphOrientations: VALID_GRAPH_ORIENTATIONS.slice(),
-    defaultExcludedTokenTypes: DEFAULT_EXCLUDED_TOKEN_TYPES.slice()
+    defaultExcludedTokenTypes: DEFAULT_EXCLUDED_TOKEN_TYPES.slice(),
+    assignVerbalUnits: assignVerbalUnits,
+    assignVerbalUnitColors: assignVerbalUnitColors,
+    verbalUnitPalette: VERBAL_UNIT_PALETTE.map(function (c) {
+      return { fill: c.fill, stroke: c.stroke, text: c.text };
+    })
   };
 
   global.ArsGrammatica = ArsGrammatica;

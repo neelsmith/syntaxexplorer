@@ -164,9 +164,9 @@
       return;
     }
 
-    var definition;
+    var graphResult;
     try {
-      definition = ArsGrammatica.sentenceMermaidGraph(slice, { orientation: orientationEl.value });
+      graphResult = ArsGrammatica.sentenceMermaidGraph(slice, { orientation: orientationEl.value });
     } catch (err) {
       clearGraph();
       setStatus('Error building the graph: ' + err.message, true);
@@ -174,10 +174,16 @@
       return;
     }
 
+    if (graphResult.warnings.length > 0) {
+      graphResult.warnings.forEach(function (warning) {
+        console.warn('sentenceMermaidGraph: ' + warning);
+      });
+    }
+
     var renderToken = ++graphRenderCount;
     var renderId = 'sentence-graph-' + renderToken;
 
-    mermaid.render(renderId, definition).then(function (result) {
+    mermaid.render(renderId, graphResult.diagram).then(function (result) {
       if (renderToken !== graphRenderCount) {
         return; // a newer render (different sentence/orientation) has since started
       }
@@ -187,6 +193,9 @@
       }
       graphViewEl.innerHTML = result.svg;
       attachPanZoom();
+      if (graphResult.warnings.length > 0) {
+        setStatus(graphResult.warnings.join(' '), false);
+      }
     }, function (err) {
       if (renderToken !== graphRenderCount) {
         return;

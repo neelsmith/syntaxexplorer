@@ -43,7 +43,15 @@ wherever those end up.
    essentially never meaningful nodes in a dependency diagram — this is
    `sentenceMermaidGraph`'s own default (`excludeTokenTypes: ["punctuation"]`),
    not something `app.js` does itself; see notes/library-api.md.
-6. The graph is rendered at its true natural size (not shrunk to fit)
+6. Nodes belonging to the same "verbal unit" (clause-like subtree —
+   see notes/library-api.md's "Coloring by verbal unit" section) are
+   colored with the same pastel color, again `sentenceMermaidGraph`'s
+   own default (`colorByVerbalUnit: true`) rather than app-specific
+   logic. If a sentence has more distinct verbal units than the
+   8-color palette (rare), `sentenceMermaidGraph` returns a warning
+   alongside the diagram; `app.js` logs it to the console and also
+   shows it in the status line so it isn't silently missed.
+7. The graph is rendered at its true natural size (not shrunk to fit)
    inside a fixed-height, pannable/zoomable viewport: scroll or pinch
    to zoom, drag to pan, or use the on-diagram +/-/reset buttons. This
    is what keeps a large sentence's graph legible instead of being

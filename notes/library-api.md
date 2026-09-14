@@ -138,10 +138,14 @@ the source text; see the two-context sentence in
 
 ### Rendering a sentence's dependency relations as a graph
 
-- `ArsGrammatica.sentenceMermaidGraph(tokenSlice, {orientation='BT', excludeTokenTypes=['punctuation']})` —
+- `ArsGrammatica.sentenceMermaidGraph(tokenSlice, {orientation='BT', excludeTokenTypes=['punctuation'], colorByVerbalUnit=true})` —
   builds a complete [Mermaid](https://mermaid.js.org/) `graph` definition
   (a flowchart-family diagram) from a sentence's tokens, using the
-  `related1`/`relationship1` and `related2`/`relationship2` columns:
+  `related1`/`relationship1` and `related2`/`relationship2` columns.
+  Returns `{diagram, warnings}` — `diagram` is the Mermaid source text;
+  `warnings` lists non-fatal issues noticed while building it (see
+  "Coloring by verbal unit", below, for the one warning currently
+  possible). Node/edge construction itself works as follows:
   - Every token whose `tokentype` (case-insensitive) is not in
     `excludeTokenTypes` becomes a node, labelled with its `text`.
     `excludeTokenTypes` defaults to `["punctuation"]`, since punctuation
@@ -181,13 +185,76 @@ the source text; see the two-context sentence in
     edge labels, the `|` delimiter itself) so a stray character in the
     source data can't corrupt the diagram syntax.
 
-  This function only ever returns Mermaid *source text* — it doesn't
-  render anything itself, so it has no dependency on Mermaid (or any
-  other library) and is just as reusable in a context that never wants
-  to draw a picture (e.g. exporting the definition to paste into a
-  Markdown file elsewhere). `apps/sentence-explorer` is what actually
-  renders it, using a vendored copy of Mermaid — see
+  This function's `diagram` is always Mermaid *source text* — it
+  doesn't render anything itself, so it has no dependency on Mermaid
+  (or any other library) and is just as reusable in a context that
+  never wants to draw a picture (e.g. exporting the definition to
+  paste into a Markdown file elsewhere). `apps/sentence-explorer` is
+  what actually renders it, using a vendored copy of Mermaid — see
   notes/sentence-explorer-app.md.
+
+#### Coloring by verbal unit
+
+A "verbal unit" is a clause-like subtree of a sentence's tokens,
+anchored by the one token whose own `verbalunit` field names its own
+`id` (arsgrammatica marks exactly one token per clause this way).
+When `colorByVerbalUnit` is true (the default), every node whose
+tokens resolves to some verbal unit is colored with a `classDef`/`class`
+pair, using the same 8-color pastel palette, in the same order, as
+arsgrammatica's own Python `mermaid.py`
+(https://github.com/neelsmith/arsgrammatica) — so a diagram built here
+looks the same as one built there. Pass `colorByVerbalUnit: false` to
+skip coloring and leave every node with Mermaid's default styling.
+
+The clustering itself is exposed as two standalone functions, so an
+app can compute verbal-unit membership or colors without going through
+Mermaid at all:
+
+- `ArsGrammatica.assignVerbalUnits(tokenSlice)` — returns a
+  `Map<tokenKey, tokenKey|null>` from every token's own key (see
+  `tokenKey(context, id)` below) to the key of the anchor token whose
+  verbal unit it belongs to, found by walking each token's
+  `related1`/`related2` chain up to an anchor (`null` if no anchor is
+  reachable, e.g. a token with no relations of its own, or a relation
+  cycle that never reaches an anchor). Pass the sentence's *full,
+  unfiltered* token slice — resolution may need to walk through a
+  token that would otherwise be excluded from the graph, e.g.
+  punctuation.
+- `ArsGrammatica.assignVerbalUnitColors(orderedTokens, assignment)` —
+  given tokens in display order and an `assignVerbalUnits` result,
+  returns `{colors, order, warnings}`: `colors` maps each distinct
+  unit's key to a `{fill, stroke, text}` hex-color triple, assigned in
+  first-appearance order among `orderedTokens` (typically the tokens
+  that will actually become graph nodes); `order` is that same
+  first-appearance list of unit keys; `warnings` contains one message
+  if there were more than 8 distinct units (the palette repeats after
+  8, which can make two unrelated units look the same color).
+- `ArsGrammatica.verbalUnitPalette` — the 8 `{fill, stroke, text}`
+  colors themselves, in palette order, for an app that wants to build
+  its own legend.
+
+Two "wrinkles" from the Python original are preserved exactly, because
+a subordinate clause's connective word frequently has its *own*
+outgoing relation pointing into the clause it's subordinate *to* (not
+the clause it introduces), so resolving strictly outward via
+`related1`/`related2` would put it in the wrong unit:
+
+- **"unit verb" reverse link** — a clause's own verb can explicitly
+  claim a connective token (e.g. a relative pronoun or subordinating
+  conjunction) as a member of its own clause by pointing *at* it with
+  relationship `"unit verb"`, overriding whatever that connective
+  token's own `relatedN` chain would otherwise resolve to.
+- **ablative absolute** — a token pointed at by a `"circumstantial
+  participle"` relationship resolves through that participle instead
+  of its own `relatedN` chain, but only when the token itself also
+  carries an `"ablative absolute"` relationship (on either
+  `related1`/`relationship1` or `related2`/`relationship2`); otherwise
+  it falls through to the normal `relatedN` walk.
+
+Deliberately left out, since arsgrammatica's Python version has no
+equivalent need here and none of this was asked for: "implied token"
+amber styling/shape, `rank_by_depth` invisible depth-alignment links,
+`aat_depth`-based filtering, and a dedicated `show_root` root node.
 
 ## Testing
 
