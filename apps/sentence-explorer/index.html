@@ -92,7 +92,13 @@
     color: var(--muted);
   }
   .graph-section {
-    margin-top: 1.5rem;
+    /* Spans both #explorer columns, so it lands in its own full-width
+       row below the sentence menu/text row instead of sharing a column
+       with either of them — full width here meaning the full content
+       column (same width as the header/menu above), not a break past
+       the page's own max-width. */
+    grid-column: 1 / -1;
+    margin-top: 0.5rem;
   }
   .graph-controls {
     display: flex;
@@ -125,8 +131,8 @@
     border: 1px solid var(--border);
     border-radius: 4px;
     background: var(--accent);
-    height: 60vh;
-    min-height: 320px;
+    height: 65vh;
+    min-height: 360px;
   }
   #graph-view:empty {
     display: flex;
@@ -172,21 +178,21 @@
     <div>
       <h2>Sentence text</h2>
       <div id="sentence-view"></div>
+    </div>
 
-      <div class="graph-section">
-        <div class="graph-controls">
-          <h2 style="margin:0;">Dependency graph</h2>
-          <label for="graph-orientation">Orientation</label>
-          <select id="graph-orientation">
-            <option value="BT" selected>Bottom-to-top (BT)</option>
-            <option value="TB">Top-to-bottom (TB)</option>
-            <option value="LR">Left-to-right (LR)</option>
-            <option value="RL">Right-to-left (RL)</option>
-          </select>
-        </div>
-        <p class="graph-hint">Scroll or pinch to zoom, drag to pan, or use the +/&minus;/reset buttons in the corner.</p>
-        <div id="graph-view"></div>
+    <div class="graph-section">
+      <div class="graph-controls">
+        <h2 style="margin:0;">Dependency graph</h2>
+        <label for="graph-orientation">Orientation</label>
+        <select id="graph-orientation">
+          <option value="BT" selected>Bottom-to-top (BT)</option>
+          <option value="TB">Top-to-bottom (TB)</option>
+          <option value="LR">Left-to-right (LR)</option>
+          <option value="RL">Right-to-left (RL)</option>
+        </select>
       </div>
+      <p class="graph-hint">Scroll or pinch to zoom, drag to pan, or use the +/&minus;/reset buttons in the corner.</p>
+      <div id="graph-view"></div>
     </div>
   </div>
 

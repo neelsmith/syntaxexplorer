@@ -138,15 +138,23 @@ the source text; see the two-context sentence in
 
 ### Rendering a sentence's dependency relations as a graph
 
-- `ArsGrammatica.sentenceMermaidGraph(tokenSlice, {orientation='BT'})` —
+- `ArsGrammatica.sentenceMermaidGraph(tokenSlice, {orientation='BT', excludeTokenTypes=['punctuation']})` —
   builds a complete [Mermaid](https://mermaid.js.org/) `graph` definition
   (a flowchart-family diagram) from a sentence's tokens, using the
   `related1`/`relationship1` and `related2`/`relationship2` columns:
-  - Every token becomes a node, labelled with its `text` (so tokens with
-    no relations of their own, like punctuation, still show up as
-    isolated nodes rather than being silently dropped).
+  - Every token whose `tokentype` (case-insensitive) is not in
+    `excludeTokenTypes` becomes a node, labelled with its `text`.
+    `excludeTokenTypes` defaults to `["punctuation"]`, since punctuation
+    tokens are essentially never meaningful nodes in a dependency graph
+    and rarely carry relations of their own; pass `excludeTokenTypes: []`
+    to include every token, punctuation included. The default list is
+    also exposed as `ArsGrammatica.defaultExcludedTokenTypes`, the same
+    pattern as `validGraphOrientations` below.
   - `relatedN` names another token's `id`; an edge is drawn from the
-    token to that target, labelled with `relationshipN`.
+    token to that target, labelled with `relationshipN` — but only when
+    the target is itself an *included* token: a `relatedN` value naming
+    an excluded (e.g. punctuation) token is treated the same as an
+    unresolvable one (see below) rather than being drawn anyway.
   - Because a token's `id` is only guaranteed unique *within its own
     `context`* (see the format's own rules, above), a `relatedN` value
     is resolved by pairing it with the *token's own* `context` — not
@@ -157,12 +165,14 @@ the source text; see the two-context sentence in
     express that with a bare id), so such a sentence's graph can end up
     with more than one disconnected component. That's a limitation of
     the file format itself, not something this function works around.
-  - A `relatedN` value that doesn't resolve to any token in the slice at
-    all (for example, the `"root"` sentinel arsgrammatica's own
+  - A `relatedN` value that doesn't resolve to any included token in the
+    slice at all (for example, the `"root"` sentinel arsgrammatica's own
     documentation shows being used in a token's own `related1` field to
     flag it as the sentence's syntactic root, rather than pointing at
     another token) is simply skipped — no edge and no fabricated `root`
-    node are created for it.
+    node are created for it. If excluding a token type leaves nothing at
+    all (e.g. a punctuation-only "sentence"), the function throws rather
+    than silently returning an empty diagram.
   - `orientation` must be one of `"TB"`, `"BT"` (the default — root/verb
     typically ends up near the bottom), `"LR"`, `"RL"` — the full list is
     also exposed as `ArsGrammatica.validGraphOrientations`, so an app can

@@ -32,12 +32,17 @@ wherever those end up.
 4. Selecting a sentence computes its full token slice with
    `ArsGrammatica.tokensForSentence`, shows the full black-text view
    from `ArsGrammatica.sentenceText`, and renders its dependency graph.
-5. A "Dependency graph" section below the sentence text has an
+5. Below that — in its own full-width row, not squeezed into a column
+   next to the sentence menu — a "Dependency graph" section has an
    orientation picker (Bottom-to-top/BT, the default, Top-to-bottom/TB,
    Left-to-right/LR, Right-to-left/RL — options mirror
    `ArsGrammatica.validGraphOrientations`) and the rendered graph
    itself. Changing orientation re-renders the currently-selected
-   sentence's graph without needing to reselect it.
+   sentence's graph without needing to reselect it. Punctuation tokens
+   (periods, commas, etc.) are left out of the graph, since they're
+   essentially never meaningful nodes in a dependency diagram — this is
+   `sentenceMermaidGraph`'s own default (`excludeTokenTypes: ["punctuation"]`),
+   not something `app.js` does itself; see notes/library-api.md.
 6. The graph is rendered at its true natural size (not shrunk to fit)
    inside a fixed-height, pannable/zoomable viewport: scroll or pinch
    to zoom, drag to pan, or use the on-diagram +/-/reset buttons. This
@@ -117,6 +122,23 @@ from the first version of this app: svg-pan-zoom manages the visible
 region itself via an SVG transform, so it needs a stable-size viewport
 to fit and center against, and native scrollbars over the same content
 would just fight it (double controls doing the same job).
+
+### Layout: graph section is a full-width row, not a column
+
+`#explorer` is a two-column CSS grid (sentence menu | sentence text).
+`.graph-section` is given `grid-column: 1 / -1`, which — combined with
+being placed after both column `<div>`s in the markup rather than
+inside the second one — makes the grid auto-place it into a new row
+that spans both columns, instead of sharing the second column with the
+sentence-text view. "Full width" here means the full width of this
+app's own content column (the same width as the header and file picker
+above it, capped by `body`'s `max-width: 1100px`), not a break out to
+the raw browser viewport width; the latter (a "full-bleed" section
+wider than the rest of the centered page) is a reasonable follow-up if
+the content-column width still isn't enough room, but wasn't what was
+built here since it's a bigger visual change to the rest of the page,
+worth deciding on deliberately rather than as a side effect of a graph
+sizing fix.
 
 ## Known limitations (initial version)
 

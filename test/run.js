@@ -140,6 +140,10 @@ check('sentenceMermaidGraph defaults to BT orientation', function () {
   assert.ok(graph.indexOf('graph BT\n') === 0, 'expected graph to start with "graph BT", got: ' + JSON.stringify(graph.slice(0, 20)));
 });
 
+check('ArsGrammatica.defaultExcludedTokenTypes exposes the default exclusion list', function () {
+  assert.deepStrictEqual(ArsGrammatica.defaultExcludedTokenTypes, ['punctuation']);
+});
+
 check('sentenceMermaidGraph accepts TB/LR/RL orientation', function () {
   var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
   ['TB', 'LR', 'RL'].forEach(function (orientation) {
@@ -161,12 +165,47 @@ check('sentenceMermaidGraph rejects an empty token slice', function () {
   }, /token slice is empty/);
 });
 
-check('sentenceMermaidGraph declares one node per token, labelled with its text', function () {
+check('sentenceMermaidGraph declares one node per non-punctuation token, labelled with its text', function () {
   var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
   var graph = ArsGrammatica.sentenceMermaidGraph(slice);
-  ['Arma', 'virum', 'que', 'cano', '.'].forEach(function (text, i) {
+  ['Arma', 'virum', 'que', 'cano'].forEach(function (text, i) {
     assert.ok(graph.indexOf('n' + i + '["' + text + '"]') !== -1, 'missing node for "' + text + '" in:\n' + graph);
   });
+});
+
+check('sentenceMermaidGraph excludes punctuation tokens by default', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice);
+  assert.strictEqual(graph.indexOf('["."]'), -1, 'a node for the period should not be present by default:\n' + graph);
+  var nodeCount = (graph.match(/^  n\d+\[/gm) || []).length;
+  assert.strictEqual(nodeCount, 4, 'expected 4 nodes (punctuation excluded), got ' + nodeCount + ':\n' + graph);
+});
+
+check('sentenceMermaidGraph can include punctuation via excludeTokenTypes: []', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice, { excludeTokenTypes: [] });
+  assert.ok(graph.indexOf('["."]') !== -1, 'expected a node for the period when excludeTokenTypes is empty:\n' + graph);
+  var nodeCount = (graph.match(/^  n\d+\[/gm) || []).length;
+  assert.strictEqual(nodeCount, 5, 'expected 5 nodes (nothing excluded), got ' + nodeCount + ':\n' + graph);
+});
+
+check('sentenceMermaidGraph drops an edge whose relatedN points at an excluded (punctuation) token', function () {
+  var slice = [
+    { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: 'foo', related1: 't1', relationship1: 'points at punctuation' },
+    { context: 'urn:cts:test:work:1', id: 't1', tokentype: 'punctuation', text: '.' }
+  ];
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice);
+  assert.strictEqual((graph.match(/^  n\d+\[/gm) || []).length, 1, 'expected only the non-punctuation token as a node:\n' + graph);
+  assert.strictEqual(graph.indexOf('-->'), -1, 'expected no edge, since its only target was excluded:\n' + graph);
+});
+
+check('sentenceMermaidGraph throws if excludeTokenTypes removes every token', function () {
+  var slice = [
+    { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'punctuation', text: '.' }
+  ];
+  assert.throws(function () {
+    ArsGrammatica.sentenceMermaidGraph(slice);
+  }, /no tokens remain after excluding tokentypes/);
 });
 
 check('sentenceMermaidGraph draws edges for related1/relationship1 and related2/relationship2', function () {

@@ -371,6 +371,8 @@
     return sanitizeMermaidText(text).replace(/\|/g, '/');
   }
 
+  var DEFAULT_EXCLUDED_TOKEN_TYPES = ['punctuation'];
+
   /**
    * Build a Mermaid `graph` definition showing a sentence's internal
    * syntactic relations, using the `related1`/`relationship1` and
@@ -380,20 +382,25 @@
    * connection.
    *
    * Every token in `tokenSlice` becomes a node (labelled with its
-   * surface `text`), whether or not it has any relations of its own
-   * (punctuation tokens typically don't). An edge is drawn for each
-   * `relatedN` value that resolves to another token in the same
-   * sentence (matched by that token's own `context` plus the `relatedN`
-   * id, since ids are only guaranteed unique within a context); a
-   * `relatedN` value that does not resolve to any token in the slice
-   * (for example, a sentinel value such as "root" that some analyses
-   * use to flag a sentence's syntactic root) is left out rather than
-   * fabricating a node for it.
+   * surface `text`), except tokens whose `tokentype` is in
+   * `excludeTokenTypes` (case-insensitive; defaults to `["punctuation"]`,
+   * since punctuation tokens are essentially never meaningful nodes in
+   * a dependency graph and rarely carry any relations of their own).
+   * Pass `excludeTokenTypes: []` to include every token, punctuation
+   * included. An edge is drawn for each `relatedN` value that resolves
+   * to another *included* token in the same sentence (matched by that
+   * token's own `context` plus the `relatedN` id, since ids are only
+   * guaranteed unique within a context); a `relatedN` value that does
+   * not resolve to any included token in the slice — either because
+   * it's a sentinel value such as "root" that some analyses use to
+   * flag a sentence's syntactic root, or because it names a token that
+   * was excluded — is left out rather than fabricating a node for it.
    *
    * @param {Object[]} tokenSlice - full ordered token slice for one
    *   sentence, e.g. as returned by tokensForSentence. Must be non-empty.
-   * @param {{orientation?: string}} [options] - orientation is one of
-   *   "TB", "BT" (default), "LR", "RL".
+   * @param {{orientation?: string, excludeTokenTypes?: string[]}} [options] -
+   *   orientation is one of "TB", "BT" (default), "LR", "RL".
+   *   excludeTokenTypes defaults to ["punctuation"].
    * @returns {string} a complete Mermaid `graph` definition.
    */
   function sentenceMermaidGraph(tokenSlice, options) {
@@ -409,19 +416,36 @@
       throw new Error('sentenceMermaidGraph: token slice is empty');
     }
 
-    // Map each token's (context, id) to a synthetic, always-unique node
-    // id: a sentence's tokens can span more than one context, and a
-    // token's own `id` is only guaranteed unique *within* its context,
-    // so plain token ids could collide across contexts.
+    var excludeTokenTypes = (options.excludeTokenTypes || DEFAULT_EXCLUDED_TOKEN_TYPES).map(function (t) {
+      return String(t).toLowerCase();
+    });
+
+    var graphTokens = tokenSlice.filter(function (token) {
+      return excludeTokenTypes.indexOf((token.tokentype || '').toLowerCase()) === -1;
+    });
+
+    if (graphTokens.length === 0) {
+      throw new Error(
+        'sentenceMermaidGraph: no tokens remain after excluding tokentypes: ' + excludeTokenTypes.join(', ')
+      );
+    }
+
+    // Map each remaining token's (context, id) to a synthetic,
+    // always-unique node id: a sentence's tokens can span more than one
+    // context, and a token's own `id` is only guaranteed unique *within*
+    // its context, so plain token ids could collide across contexts.
+    // Excluded tokens (e.g. punctuation) are simply absent from this
+    // map, so a relatedN value naming one resolves to nothing below,
+    // the same as an unresolvable sentinel like "root".
     var nodeIdByKey = new Map();
-    tokenSlice.forEach(function (token, i) {
+    graphTokens.forEach(function (token, i) {
       nodeIdByKey.set(tokenKey(token.context, token.id), 'n' + i);
     });
 
     var nodeLines = [];
     var edgeLines = [];
 
-    tokenSlice.forEach(function (token, i) {
+    graphTokens.forEach(function (token, i) {
       var nodeId = 'n' + i;
       var label = sanitizeMermaidText(token.text || token.id || '');
       nodeLines.push(nodeId + '["' + label + '"]');
@@ -433,7 +457,7 @@
         }
         var targetNodeId = nodeIdByKey.get(tokenKey(token.context, relatedId));
         if (!targetNodeId) {
-          return; // doesn't resolve to a token in this sentence; skip it
+          return; // doesn't resolve to an included token in this sentence; skip it
         }
         var relationship = (token[pair[1]] || '').trim();
         var arrow = relationship ? '-->|' + sanitizeMermaidEdgeLabel(relationship) + '|' : '-->';
@@ -460,7 +484,8 @@
     sentenceLabel: sentenceLabel,
     defaultNoSpaceBefore: defaultNoSpaceBefore,
     sentenceMermaidGraph: sentenceMermaidGraph,
-    validGraphOrientations: VALID_GRAPH_ORIENTATIONS.slice()
+    validGraphOrientations: VALID_GRAPH_ORIENTATIONS.slice(),
+    defaultExcludedTokenTypes: DEFAULT_EXCLUDED_TOKEN_TYPES.slice()
   };
 
   global.ArsGrammatica = ArsGrammatica;
