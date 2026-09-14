@@ -1,4 +1,4 @@
-# syntaxexplorer
+# `syntaxexplorer`
 
 
 > *See [release notes](https://github.com/neelsmith/syntaxexplorer/blob/main/releases.md)*.
