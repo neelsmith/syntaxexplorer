@@ -6,6 +6,6 @@
 A javascript library and single-page web app for exploring previously computed syntactic analyses such as those created by [`arsgrammatica`](https://github.com/neelsmith/arsgrammatica).
 
 
-Documentation: 
+Documentation: [github pages](https://neelsmith.github.io/syntaxexplorer/)
 
-Issues:
+Issues and work in progress: [project issue tracker](https://github.com/neelsmith/syntaxexplorer/issues)
