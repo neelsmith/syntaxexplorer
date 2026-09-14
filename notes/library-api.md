@@ -149,24 +149,75 @@ the source text; see the two-context sentence in
   text view. `warnings` mirrors `sentenceMermaidGraph`'s (more distinct
   verbal units than the 8-color palette has colors for).
 
-  Each colored span carries both an inline `style` (fill/text/border
-  colors from the palette, so it looks right immediately with no host
-  CSS — consistent with this library's "just open the HTML file"
-  design) and a `class="vu vuN"` (`N` matching the same unit's `vuN`
-  class in the Mermaid `classDef`/`class` lines), so a host page can
-  restyle by unit via CSS instead, if it wants to. `excludeTokenTypes`
-  here does *not* remove any token from the rendered text — unlike
-  `sentenceMermaidGraph`, every token in `tokenSlice` is always shown,
-  same as `sentenceText` — it only controls which tokens count toward
-  first-appearance color ordering, so it can match
-  `sentenceMermaidGraph`'s own option of the same name for the same
-  sentence. Pass `colorByVerbalUnit: false` for plain, HTML-escaped
-  text with no `<span>`s at all — still HTML-safe, just uncolored.
+  *Every* token gets a `<span>` here (punctuation included) — not just
+  ones with a resolved verbal unit — because every span also carries
+  `data-context`/`data-id`, and (when it resolves to another token
+  actually present in `tokenSlice`) `data-relatedN-id`/`data-relationshipN`,
+  which is what `enableTokenHover` (below) needs to find related tokens
+  purely from the rendered markup. A span whose verbal unit *could* be
+  resolved additionally gets an inline `style` (fill/text/border colors
+  from the palette, so it looks right immediately with no host CSS —
+  consistent with this library's "just open the HTML file" design) and
+  a `class="vu vuN"` (`N` matching the same unit's `vuN` class in the
+  Mermaid `classDef`/`class` lines), so a host page can restyle by unit
+  via CSS instead, if it wants to. `excludeTokenTypes` here does *not*
+  remove any token from the rendered text — unlike `sentenceMermaidGraph`,
+  every token in `tokenSlice` is always shown, same as `sentenceText` —
+  it only controls which tokens count toward first-appearance color
+  ordering, so it can match `sentenceMermaidGraph`'s own option of the
+  same name for the same sentence. Pass `colorByVerbalUnit: false` to
+  omit the color class/style from every span — every span (and its
+  hover data) is still present, just uncolored.
 
   `apps/sentence-explorer` uses this instead of `sentenceText` for its
   "Sentence text" panel, so the same coloring the dependency graph uses
   is visible directly on the sentence's own running text — see
   notes/sentence-explorer-app.md.
+
+#### Hovering a token to see its relations
+
+- `ArsGrammatica.enableTokenHover(container, {tooltip=true, onHover?, onUnhover?})` —
+  wires up hover interactivity on a container holding one or more
+  `sentenceHtml`-rendered sentences. Hovering a token span:
+  1. highlights that token (a solid outline);
+  2. highlights every token directly related to it — its own resolved
+     `related1`/`related2` targets, *and* any other token whose
+     `related1`/`related2` names it back — with a visually distinct
+     dashed outline;
+  3. shows a small built-in tooltip naming each relationship, one line
+     per connection, in the same "source → relationship → target"
+     direction `sentenceMermaidGraph`'s own edges use (so a token with
+     both incoming and outgoing relations gets one line per relation).
+
+  This works purely off the `data-*` attributes `sentenceHtml` writes
+  onto each span — it doesn't need the original token array again, so
+  a host page only has to keep the container's markup around, not the
+  token data. It scans for related tokens *within the container*, so
+  it only makes sense to call it once per rendered sentence's
+  container.
+
+  Call it *once*, on a persistent container element (e.g. the element
+  a page assigns `sentenceHtml`'s `html` into) — it listens on the
+  container itself via event delegation, so it keeps working after the
+  container's `innerHTML` is replaced with a new sentence's markup; no
+  need to call it again after every re-render. Calling it again on the
+  same container is a harmless no-op.
+
+  Pass `tooltip: false` to skip the built-in tooltip (e.g. because a
+  host page wants to show relations its own way) and use `onHover`/
+  `onUnhover` instead: `onHover` receives
+  `{tokenElement, relations}`, where each entry of `relations` is
+  `{direction: "outgoing"|"incoming", relationship, other}` (`other`
+  being the related token's own span) — enough for a host page to
+  build its own display (a side panel, a status line, etc.) instead of,
+  or alongside, the built-in tooltip.
+
+  Requires a browser DOM (`document`); calling it outside one (e.g.
+  from a Node script) throws immediately rather than failing obscurely
+  later. It injects one small `<style>` block into the document the
+  first time it's called (a no-op on later calls), so the highlighting
+  works with no CSS a host page has to write itself — again consistent
+  with this library's "just open the HTML file" design.
 
 ### Rendering a sentence's dependency relations as a graph
 

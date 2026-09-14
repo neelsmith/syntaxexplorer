@@ -420,17 +420,18 @@ check('sentenceHtml rejects an empty token slice', function () {
   }, /token slice is empty/);
 });
 
-check('sentenceHtml wraps every token of a single-clause sentence in the same vu0 span', function () {
+check('sentenceHtml wraps every token -- including punctuation -- in a span, coloring only those with a resolved verbal unit', function () {
   var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
   var html = ArsGrammatica.sentenceHtml(slice).html;
   ['Arma', 'virum', 'que', 'cano'].forEach(function (text) {
-    var re = new RegExp('<span class="vu vu0" style="background-color:#82bbff;color:#000000;border:1px solid #2a78d6;[^"]*">' + text + '</span>');
+    var re = new RegExp('<span class="ag-token vu vu0"[^>]*style="background-color:#82bbff;color:#000000;border:1px solid #2a78d6;[^"]*">' + text + '</span>');
     assert.ok(re.test(html), 'missing colored span for "' + text + '" in:\n' + html);
   });
-  // the trailing period has no relatedN of its own, so it should be
-  // plain, unwrapped text, not a span
-  assert.ok(/>\.$|\.$/.test(html.trim()), 'expected the sentence to end in a bare, unwrapped period:\n' + html);
-  assert.strictEqual((html.match(/<span/g) || []).length, 4, 'expected exactly 4 colored spans (period excluded):\n' + html);
+  // the trailing period has no relatedN of its own, so it should be an
+  // uncolored span (no vu class, no style) rather than a colored one
+  assert.ok(/<span class="ag-token" [^>]*>\.<\/span>$/.test(html.trim()), 'expected the sentence to end in an uncolored period span:\n' + html);
+  assert.strictEqual((html.match(/<span/g) || []).length, 5, 'expected 5 spans total (one per token, punctuation included):\n' + html);
+  assert.strictEqual((html.match(/vu vu0/g) || []).length, 4, 'expected exactly 4 colored spans (period excluded):\n' + html);
 });
 
 check('sentenceHtml colors match sentenceMermaidGraph\'s colors for the same sentence', function () {
@@ -441,11 +442,13 @@ check('sentenceHtml colors match sentenceMermaidGraph\'s colors for the same sen
   assert.ok(html.indexOf('background-color:#82bbff;color:#000000;border:1px solid #2a78d6') !== -1, html);
 });
 
-check('colorByVerbalUnit: false on sentenceHtml renders plain, unwrapped, HTML-escaped text', function () {
+check('colorByVerbalUnit: false on sentenceHtml keeps every span (for hover) but omits all color classes/styles', function () {
   var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
   var html = ArsGrammatica.sentenceHtml(slice, { colorByVerbalUnit: false }).html;
-  assert.strictEqual(html.indexOf('<span'), -1, html);
-  assert.strictEqual(html, 'Arma virumque cano.');
+  assert.strictEqual(html.indexOf('vu'), -1, 'expected no "vu"/"vuN" class anywhere:\n' + html);
+  assert.strictEqual(html.indexOf('style='), -1, 'expected no inline style anywhere:\n' + html);
+  assert.strictEqual((html.match(/<span/g) || []).length, 5, html);
+  assert.strictEqual(html.replace(/<[^>]+>/g, ''), 'Arma virumque cano.');
 });
 
 check('sentenceHtml HTML-escapes token text so it cannot inject markup', function () {
@@ -457,14 +460,14 @@ check('sentenceHtml HTML-escapes token text so it cannot inject markup', functio
   assert.ok(html.indexOf('&lt;b&gt;&amp;&quot;&#39;&lt;/b&gt;') !== -1, html);
 });
 
-check('sentenceHtml: a token with no reachable verbal-unit anchor is rendered as plain, unwrapped text', function () {
+check('sentenceHtml: a token with no reachable verbal-unit anchor still gets a span, just uncolored', function () {
   var slice = [
     { context: VU_CONTEXT, id: 't0', tokentype: 'lexical', text: 'anchored', verbalunit: 't0' },
     { context: VU_CONTEXT, id: 't1', tokentype: 'lexical', text: 'unanchored' }
   ];
   var html = ArsGrammatica.sentenceHtml(slice).html;
-  assert.strictEqual((html.match(/<span/g) || []).length, 1, html);
-  assert.ok(html.indexOf('>unanchored<') === -1 && / unanchored$/.test(html), 'expected "unanchored" to appear as bare trailing text:\n' + html);
+  assert.strictEqual((html.match(/<span/g) || []).length, 2, html);
+  assert.ok(/<span class="ag-token" [^>]*>unanchored<\/span>/.test(html), 'expected "unanchored" to be an uncolored span:\n' + html);
 });
 
 check('sentenceHtml surfaces the same >8-verbal-units warning as sentenceMermaidGraph', function () {
@@ -481,7 +484,74 @@ check('sentenceHtml respects a custom noSpaceBefore option, same as sentenceText
   var alwaysSpace = function () { return false; };
   var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
   var html = ArsGrammatica.sentenceHtml(slice, { noSpaceBefore: alwaysSpace, colorByVerbalUnit: false }).html;
-  assert.strictEqual(html, ' Arma virum que cano .');
+  assert.strictEqual(html.replace(/<[^>]+>/g, ''), ' Arma virum que cano .');
+});
+
+// -- sentenceHtml hover data attributes (data-context/data-id/data-relatedN-id/data-relationshipN) --
+
+check('sentenceHtml tags every span with data-context and data-id', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = ArsGrammatica.sentenceHtml(slice).html;
+  slice.forEach(function (token) {
+    var re = new RegExp('data-context="' + token.context + '" data-id="' + token.id + '"');
+    assert.ok(re.test(html), 'missing data-context/data-id for ' + token.id + ' in:\n' + html);
+  });
+});
+
+check('sentenceHtml tags a span with data-relatedN-id/data-relationshipN when relatedN resolves to a token in the slice', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = ArsGrammatica.sentenceHtml(slice).html;
+  // Arma (t0) -> direct object -> cano (t3)
+  assert.ok(/data-id="t0"[^>]*data-related1-id="t3" data-relationship1="direct object"/.test(html), html);
+  // que (t2) has two relations: -> t0 and -> t1, both "coordinating conjunction"
+  assert.ok(/data-id="t2"[^>]*data-related1-id="t0" data-relationship1="coordinating conjunction" data-related2-id="t1" data-relationship2="coordinating conjunction"/.test(html), html);
+});
+
+check('sentenceHtml omits data-relatedN-id for the "root" sentinel or an unresolvable id', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = ArsGrammatica.sentenceHtml(slice).html;
+  // cano (t3) has related1="root" -- must not produce a data-related1-id at all
+  var canoSpan = html.match(/<span[^>]*data-id="t3"[^>]*>/)[0];
+  assert.strictEqual(canoSpan.indexOf('data-related1-id'), -1, canoSpan);
+
+  var slice2 = [
+    { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: 'foo', related1: 'nope', relationship1: 'x' }
+  ];
+  var html2 = ArsGrammatica.sentenceHtml(slice2).html;
+  assert.strictEqual(html2.indexOf('data-related1-id'), -1, html2);
+});
+
+check('sentenceHtml resolves relatedN for hover even when the target is punctuation (unlike sentenceMermaidGraph\'s edges)', function () {
+  var slice = [
+    { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: 'foo', related1: 't1', relationship1: 'points at punctuation' },
+    { context: 'urn:cts:test:work:1', id: 't1', tokentype: 'punctuation', text: '.' }
+  ];
+  var html = ArsGrammatica.sentenceHtml(slice).html;
+  assert.ok(/data-id="t0"[^>]*data-related1-id="t1" data-relationship1="points at punctuation"/.test(html), html);
+});
+
+// -- enableTokenHover --------------------------------------------------
+
+check('enableTokenHover throws outside a browser DOM', function () {
+  assert.throws(function () {
+    ArsGrammatica.enableTokenHover({});
+  }, /requires a browser DOM/);
+});
+
+check('enableTokenHover throws without a container', function () {
+  var originalDocument = global.document;
+  global.document = {}; // fake just enough to get past the DOM guard
+  try {
+    assert.throws(function () {
+      ArsGrammatica.enableTokenHover(null);
+    }, /container is required/);
+  } finally {
+    if (originalDocument === undefined) {
+      delete global.document;
+    } else {
+      global.document = originalDocument;
+    }
+  }
 });
 
 console.log('\n' + passed + ' check(s) passed.');

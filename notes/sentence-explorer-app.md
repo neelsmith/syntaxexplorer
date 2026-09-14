@@ -37,6 +37,12 @@ wherever those end up.
    `ArsGrammatica.sentenceText` directly (that still underlies it: the
    wording and spacing are identical, just wrapped in colored `<span>`s
    — see notes/library-api.md) — and renders its dependency graph.
+   Hovering any word highlights it, highlights whatever other word(s)
+   it's directly related to, and shows a small tooltip naming each
+   relationship — `ArsGrammatica.enableTokenHover`, wired up once on
+   `#sentence-view` at startup (`app.js` never has to call it again,
+   even after the panel's content is replaced by a later sentence
+   selection); see notes/library-api.md.
 5. Below that — in its own full-width row, not squeezed into a column
    next to the sentence menu — a "Dependency graph" section has an
    orientation picker (Bottom-to-top/BT, the default, Top-to-bottom/TB,

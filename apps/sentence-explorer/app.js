@@ -6,7 +6,10 @@
  * of its sentences, shows the "black text" of whichever sentence the
  * user selects (colored by verbal unit via ArsGrammatica.sentenceHtml),
  * and renders that sentence's dependency relations as a pannable,
- * zoomable Mermaid graph, colored by the same verbal units.
+ * zoomable Mermaid graph, colored by the same verbal units. Hovering a
+ * word in the text view highlights it, highlights any token(s) it's
+ * related to, and shows their relationship, via
+ * ArsGrammatica.enableTokenHover.
  *
  * This file is intentionally app-specific (DOM wiring only); all of
  * the file-format, text-rendering, and graph-building logic lives in
@@ -41,6 +44,13 @@
     // the container's width; svg-pan-zoom is what makes that navigable.
     mermaid.initialize({ startOnLoad: false, flowchart: { useMaxWidth: false } });
   }
+
+  // Wired up once, on the persistent #sentence-view element: it listens
+  // via event delegation, so it keeps working across every future
+  // renderSentenceView() call that replaces this element's innerHTML
+  // with a new sentence (see ArsGrammatica.enableTokenHover's own doc
+  // comment in js/lib/arsgrammatica.js).
+  ArsGrammatica.enableTokenHover(viewEl);
 
   function setStatus(message, isError) {
     statusEl.textContent = message;

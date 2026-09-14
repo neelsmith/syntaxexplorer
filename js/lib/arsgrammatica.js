@@ -769,24 +769,31 @@
 
   /**
    * Build an HTML rendering of a sentence's "black text" -- the same
-   * surface-text join sentenceText produces -- with each token whose
-   * verbal unit could be resolved wrapped in a colored `<span>`, using
-   * the same clustering and palette as sentenceMermaidGraph's own
-   * `colorByVerbalUnit` coloring. Pass the same `excludeTokenTypes` to
-   * both functions (or leave both at their shared `["punctuation"]`
-   * default) and the same verbal unit gets the same color in both a
-   * sentence's graph and its text view.
+   * surface-text join sentenceText produces -- with *every* token
+   * wrapped in a `<span>`, so the result is ready for
+   * `enableTokenHover` (below) whether or not verbal-unit coloring is
+   * also applied.
    *
-   * Each colored span carries both an inline `style` (so the coloring
-   * works immediately with no host CSS -- consistent with this
-   * library's "just open the HTML file" design, see
-   * notes/library-api.md) and a `class="vu vuN"` (so a host page can
-   * restyle by unit instead, if it wants to; `N` matches the `vuN`
-   * class sentenceMermaidGraph's own `classDef`/`class` lines use for
-   * the same unit in the graph view). A token whose verbal unit
-   * couldn't be resolved (no reachable anchor -- see
-   * assignVerbalUnits) is rendered as plain, unwrapped text, as is
-   * every token when `colorByVerbalUnit` is false.
+   * Each span always carries `data-context`/`data-id` (identifying the
+   * token itself) and, when its `related1`/`related2` resolves to
+   * another token actually present in `tokenSlice`, `data-relatedN-id`
+   * / `data-relationshipN` -- the same "root"-sentinel and
+   * unresolvable-id skipping sentenceMermaidGraph's edges use, except
+   * every token here gets a span (unlike the graph, which omits
+   * excluded/punctuation tokens as nodes entirely), so a relatedN
+   * value is only dropped here if it doesn't resolve to *any* token in
+   * the slice at all.
+   *
+   * When `colorByVerbalUnit` is true (the default), a span whose
+   * verbal unit could be resolved additionally gets a `class="vu vuN"`
+   * and an inline `style` coloring it -- using the exact same
+   * clustering and palette as sentenceMermaidGraph's own
+   * `colorByVerbalUnit` coloring (pass the same `excludeTokenTypes` to
+   * both functions, or leave both at their shared `["punctuation"]`
+   * default, and the same verbal unit gets the same color in both a
+   * sentence's graph and its text view). `colorByVerbalUnit: false`
+   * skips that class/style -- every span is still present (for hover),
+   * just uncolored.
    *
    * @param {Object[]} tokenSlice - full ordered token slice for one
    *   sentence, e.g. as returned by tokensForSentence. Must be non-empty.
@@ -797,8 +804,8 @@
    *   is shown, same as sentenceText -- it only controls which tokens
    *   count toward first-appearance color ordering, matching
    *   sentenceMermaidGraph's own option of the same name.
-   *   `colorByVerbalUnit` (default true) set to false renders plain,
-   *   HTML-escaped text with no coloring at all.
+   *   `colorByVerbalUnit` (default true) set to false omits the
+   *   coloring class/style from every span.
    * @returns {{html: string, warnings: string[]}} `html` is an HTML
    *   fragment with no wrapping element of its own -- insert it into
    *   any container via `.innerHTML`; `warnings` mirrors
@@ -827,6 +834,15 @@
       warnings = colorResult.warnings;
     }
 
+    // Every token in this slice is a valid relatedN hover target, since
+    // (unlike sentenceMermaidGraph's edges, which only connect
+    // *rendered* nodes) every token gets a span here, punctuation
+    // included.
+    var presentKeys = new Set();
+    tokenSlice.forEach(function (token) {
+      presentKeys.add(tokenKey(token.context, token.id));
+    });
+
     var html = '';
     var previous = null;
     tokenSlice.forEach(function (token) {
@@ -838,24 +854,269 @@
         html += ' ';
       }
 
-      var escaped = escapeHtml(text);
-      var unitKey = colorByVerbalUnit ? assignment.get(tokenKey(token.context, token.id)) : null;
-      var color = unitKey ? colorResult.colors.get(unitKey) : null;
-
-      if (color) {
-        var className = 'vu' + colorResult.order.indexOf(unitKey);
-        html +=
-          '<span class="vu ' + className + '" style="background-color:' + color.fill +
-          ';color:' + color.text + ';border:1px solid ' + color.stroke +
-          ';border-radius:3px;padding:0 0.15em;">' + escaped + '</span>';
-      } else {
-        html += escaped;
+      var classNames = ['ag-token'];
+      var styleAttr = '';
+      if (colorByVerbalUnit) {
+        var unitKey = assignment.get(tokenKey(token.context, token.id));
+        var color = unitKey ? colorResult.colors.get(unitKey) : null;
+        if (color) {
+          classNames.push('vu', 'vu' + colorResult.order.indexOf(unitKey));
+          styleAttr =
+            ' style="background-color:' + color.fill + ';color:' + color.text +
+            ';border:1px solid ' + color.stroke + ';border-radius:3px;padding:0 0.15em;"';
+        }
       }
+
+      var dataAttrs =
+        ' data-context="' + escapeHtml(token.context) + '" data-id="' + escapeHtml(token.id) + '"';
+      [['related1', 'relationship1', 1], ['related2', 'relationship2', 2]].forEach(function (spec) {
+        var relatedId = (token[spec[0]] || '').trim();
+        var relationship = (token[spec[1]] || '').trim();
+        if (relatedId === '' || relatedId === 'root') {
+          return;
+        }
+        if (!presentKeys.has(tokenKey(token.context, relatedId))) {
+          return; // doesn't resolve to any token in this sentence; skip it
+        }
+        dataAttrs += ' data-related' + spec[2] + '-id="' + escapeHtml(relatedId) + '"';
+        if (relationship !== '') {
+          dataAttrs += ' data-relationship' + spec[2] + '="' + escapeHtml(relationship) + '"';
+        }
+      });
+
+      html +=
+        '<span class="' + classNames.join(' ') + '"' + dataAttrs + styleAttr + '>' +
+        escapeHtml(text) + '</span>';
 
       previous = token;
     });
 
     return { html: html, warnings: warnings };
+  }
+
+  // ---------------------------------------------------------------------
+  // Interactive hover: highlighting related tokens on a sentenceHtml view
+  // ---------------------------------------------------------------------
+
+  var TOKEN_HOVER_STYLE_ID = 'ars-grammatica-token-hover-style';
+
+  function ensureTokenHoverStyles() {
+    if (typeof document === 'undefined' || document.getElementById(TOKEN_HOVER_STYLE_ID)) {
+      return;
+    }
+    var style = document.createElement('style');
+    style.id = TOKEN_HOVER_STYLE_ID;
+    style.textContent =
+      '.ag-token{cursor:default;}' +
+      '.ag-token-hovered{outline:2px solid #1a1a1a;outline-offset:1px;}' +
+      '.ag-token-related{outline:2px dashed #b45309;outline-offset:1px;}' +
+      '@media (prefers-color-scheme: dark){' +
+      '.ag-token-hovered{outline-color:#f2f2f2;}' +
+      '.ag-token-related{outline-color:#f0b429;}' +
+      '}' +
+      '.ag-token-tooltip{position:fixed;z-index:2147483647;background:#1a1a1a;color:#fff;' +
+      'font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:4px 8px;' +
+      'border-radius:4px;pointer-events:none;max-width:280px;line-height:1.4;' +
+      'box-shadow:0 2px 6px rgba(0,0,0,0.3);}' +
+      '.ag-token-tooltip div + div{margin-top:2px;}';
+    document.head.appendChild(style);
+  }
+
+  function cssEscapeAttrValue(value) {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(value);
+    }
+    return String(value).replace(/["\\]/g, '\\$&');
+  }
+
+  /**
+   * Wire up hover interactivity on a container holding one or more
+   * sentenceHtml-rendered sentences: hovering a token span
+   * 1) highlights that token, 2) highlights every token directly
+   * related to it -- its own resolved related1/related2 targets, and
+   * any *other* token whose related1/related2 names it back -- and
+   * 3) shows a small built-in tooltip naming each relationship, in the
+   * same "source -> relationship -> target" direction
+   * sentenceMermaidGraph's own edges use.
+   *
+   * Call this once on a persistent container element (e.g. the element
+   * you assign sentenceHtml's `html` into) -- it listens on the
+   * container itself via event delegation, so it keeps working after
+   * the container's innerHTML is replaced with a new sentence's markup
+   * (no need to call this again after re-rendering); calling it again
+   * on the same container is a harmless no-op.
+   *
+   * @param {Element} container
+   * @param {{tooltip?: boolean, onHover?: function({tokenElement: Element, relations: Object[]}), onUnhover?: function()}} [options] -
+   *   `tooltip` (default true) set to false to skip the built-in
+   *   tooltip (e.g. because the host page wants to show relations its
+   *   own way, via `onHover`). Each entry of `relations` is
+   *   `{direction: "outgoing"|"incoming", relationship: string, other: Element}`,
+   *   `other` being the related token's own span.
+   */
+  function enableTokenHover(container, options) {
+    if (typeof document === 'undefined') {
+      throw new Error('enableTokenHover: requires a browser DOM (document is not defined)');
+    }
+    if (!container) {
+      throw new Error('enableTokenHover: container is required');
+    }
+    options = options || {};
+    var showTooltip = options.tooltip !== false;
+    var onHover = typeof options.onHover === 'function' ? options.onHover : null;
+    var onUnhover = typeof options.onUnhover === 'function' ? options.onUnhover : null;
+
+    if (container.getAttribute('data-ars-grammatica-hover') === 'enabled') {
+      return; // already wired up; calling again is a harmless no-op
+    }
+    container.setAttribute('data-ars-grammatica-hover', 'enabled');
+
+    ensureTokenHoverStyles();
+
+    var tooltipEl = null;
+    function ensureTooltipEl() {
+      if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.className = 'ag-token-tooltip';
+        tooltipEl.hidden = true;
+        document.body.appendChild(tooltipEl);
+      }
+      return tooltipEl;
+    }
+
+    function clearHighlights() {
+      var highlighted = container.querySelectorAll('.ag-token-hovered, .ag-token-related');
+      for (var i = 0; i < highlighted.length; i++) {
+        highlighted[i].classList.remove('ag-token-hovered', 'ag-token-related');
+      }
+      if (tooltipEl) {
+        tooltipEl.hidden = true;
+      }
+    }
+
+    function findTokenElement(context, id) {
+      return container.querySelector(
+        '[data-context="' + cssEscapeAttrValue(context) + '"][data-id="' + cssEscapeAttrValue(id) + '"]'
+      );
+    }
+
+    function relationsFor(tokenEl) {
+      var context = tokenEl.getAttribute('data-context');
+      var id = tokenEl.getAttribute('data-id');
+      var relations = [];
+
+      [1, 2].forEach(function (n) {
+        var relatedId = tokenEl.getAttribute('data-related' + n + '-id');
+        if (!relatedId) {
+          return;
+        }
+        var targetEl = findTokenElement(context, relatedId);
+        if (targetEl) {
+          relations.push({
+            direction: 'outgoing',
+            relationship: tokenEl.getAttribute('data-relationship' + n) || '',
+            other: targetEl
+          });
+        }
+      });
+
+      var allTokenEls = container.querySelectorAll('[data-id]');
+      for (var i = 0; i < allTokenEls.length; i++) {
+        var otherEl = allTokenEls[i];
+        if (otherEl === tokenEl || otherEl.getAttribute('data-context') !== context) {
+          continue;
+        }
+        [1, 2].forEach(function (n) {
+          if (otherEl.getAttribute('data-related' + n + '-id') === id) {
+            relations.push({
+              direction: 'incoming',
+              relationship: otherEl.getAttribute('data-relationship' + n) || '',
+              other: otherEl
+            });
+          }
+        });
+      }
+
+      return relations;
+    }
+
+    function formatRelationLine(tokenEl, relation) {
+      var source = relation.direction === 'outgoing' ? tokenEl : relation.other;
+      var target = relation.direction === 'outgoing' ? relation.other : tokenEl;
+      return (
+        escapeHtml(source.textContent) + ' \u2192 ' + escapeHtml(relation.relationship) +
+        ' \u2192 ' + escapeHtml(target.textContent)
+      );
+    }
+
+    function positionTooltip(tooltip, tokenEl) {
+      var rect = tokenEl.getBoundingClientRect();
+      var tipRect = tooltip.getBoundingClientRect();
+      var top = rect.top - tipRect.height - 8;
+      if (top < 4) {
+        top = rect.bottom + 8;
+      }
+      var left = rect.left + rect.width / 2 - tipRect.width / 2;
+      left = Math.max(4, Math.min(left, (window.innerWidth || 0) - tipRect.width - 4));
+      tooltip.style.top = Math.round(top) + 'px';
+      tooltip.style.left = Math.round(left) + 'px';
+    }
+
+    function activate(tokenEl) {
+      clearHighlights();
+      tokenEl.classList.add('ag-token-hovered');
+
+      var relations = relationsFor(tokenEl);
+      relations.forEach(function (relation) {
+        relation.other.classList.add('ag-token-related');
+      });
+
+      if (onHover) {
+        onHover({ tokenElement: tokenEl, relations: relations });
+      }
+
+      if (showTooltip && relations.length > 0) {
+        var tooltip = ensureTooltipEl();
+        tooltip.innerHTML = relations
+          .map(function (relation) { return '<div>' + formatRelationLine(tokenEl, relation) + '</div>'; })
+          .join('');
+        tooltip.hidden = false;
+        positionTooltip(tooltip, tokenEl);
+      }
+    }
+
+    function deactivate() {
+      clearHighlights();
+      if (onUnhover) {
+        onUnhover();
+      }
+    }
+
+    container.addEventListener('mouseover', function (evt) {
+      var tokenEl = evt.target.closest && evt.target.closest('[data-id]');
+      if (!tokenEl || !container.contains(tokenEl) || tokenEl.classList.contains('ag-token-hovered')) {
+        return;
+      }
+      activate(tokenEl);
+    });
+
+    container.addEventListener('mouseout', function (evt) {
+      var tokenEl = evt.target.closest && evt.target.closest('[data-id]');
+      if (!tokenEl) {
+        return;
+      }
+      var toEl = evt.relatedTarget;
+      if (toEl && tokenEl.contains(toEl)) {
+        return;
+      }
+      deactivate();
+    });
+
+    window.addEventListener('scroll', function () {
+      if (tooltipEl && !tooltipEl.hidden) {
+        tooltipEl.hidden = true;
+      }
+    }, true);
   }
 
   // ---------------------------------------------------------------------
@@ -877,7 +1138,8 @@
     verbalUnitPalette: VERBAL_UNIT_PALETTE.map(function (c) {
       return { fill: c.fill, stroke: c.stroke, text: c.text };
     }),
-    sentenceHtml: sentenceHtml
+    sentenceHtml: sentenceHtml,
+    enableTokenHover: enableTokenHover
   };
 
   global.ArsGrammatica = ArsGrammatica;
