@@ -2,21 +2,21 @@
  * app.js — Syntax Explorer
  *
  * Wires up the page in index.html to the reusable js/lib/*.js library:
- * reads a locally-selected arsgrammatica analysis file, builds a menu
+ * reads a locally-selected saved analysis file, builds a menu
  * of its sentences, shows the "black text" of whichever sentence the
- * user selects (colored by verbal unit via ArsGrammatica.sentenceHtml),
+ * user selects (colored by verbal unit via Syntaxer.sentenceHtml),
  * and renders that sentence's dependency relations as a pannable,
  * zoomable Mermaid graph, colored by the same verbal units. Hovering a
  * word in the text view highlights it, highlights any token(s) it's
  * related to, and shows their relationship, via
- * ArsGrammatica.enableTokenHover.
+ * Syntaxer.enableTokenHover.
  *
  * This file is intentionally app-specific (DOM wiring only); all of
  * the file-format, text-rendering, and graph-building logic lives in
  * js/lib/, so it can be reused by other apps without pulling in this
  * file. Mermaid (js/vendor/mermaid/) and svg-pan-zoom
  * (js/vendor/svg-pan-zoom/) are only needed here, for actually drawing
- * and navigating the graph ArsGrammatica.sentenceMermaidGraph describes
+ * and navigating the graph Syntaxer.sentenceMermaidGraph describes
  * as plain text. See notes/sentence-explorer-app.md for why both are
  * vendored rather than loaded from a CDN.
  */
@@ -30,6 +30,14 @@
   var viewEl = document.getElementById('sentence-view');
   var orientationEl = document.getElementById('graph-orientation');
   var graphViewEl = document.getElementById('graph-view');
+  var footerEl = document.getElementById('app-footer');
+
+  // Shown once, on load: js/version.js is the single source of truth
+  // for this repo's release version (see that file for how to bump it
+  // when cutting a new release).
+  if (footerEl && typeof AppVersion !== 'undefined') {
+    footerEl.textContent = 'Syntax Explorer v' + AppVersion.version;
+  }
 
   var tokens = [];
   var sentences = [];
@@ -48,9 +56,9 @@
   // Wired up once, on the persistent #sentence-view element: it listens
   // via event delegation, so it keeps working across every future
   // renderSentenceView() call that replaces this element's innerHTML
-  // with a new sentence (see ArsGrammatica.enableTokenHover's own doc
-  // comment in js/lib/arsgrammatica.js).
-  ArsGrammatica.enableTokenHover(viewEl);
+  // with a new sentence (see Syntaxer.enableTokenHover's own doc
+  // comment in js/lib/syntaxer.js).
+  Syntaxer.enableTokenHover(viewEl);
 
   function setStatus(message, isError) {
     statusEl.textContent = message;
@@ -103,7 +111,7 @@
   });
 
   function loadAnalysis(text) {
-    var parsed = ArsGrammatica.parseAnalysis(text);
+    var parsed = Syntaxer.parseAnalysis(text);
     tokens = parsed.tokens;
     sentences = parsed.sentences;
 
@@ -114,7 +122,7 @@
       throw new Error('no "#!sentences" block was found (or it had no data rows)');
     }
 
-    tokenIndex = ArsGrammatica.indexTokens(tokens);
+    tokenIndex = Syntaxer.indexTokens(tokens);
     populateMenu();
   }
 
@@ -124,8 +132,8 @@
       var option = document.createElement('option');
       option.value = String(i);
       try {
-        var slice = ArsGrammatica.tokensForSentence(tokens, sentence, tokenIndex);
-        option.textContent = ArsGrammatica.sentenceLabel(slice);
+        var slice = Syntaxer.tokensForSentence(tokens, sentence, tokenIndex);
+        option.textContent = Syntaxer.sentenceLabel(slice);
       } catch (err) {
         option.textContent = '(sentence ' + (i + 1) + ': could not be read — ' + err.message + ')';
         option.disabled = true;
@@ -149,7 +157,7 @@
     var i = Number(menuEl.value);
     var sentence = sentences[i];
     try {
-      var slice = ArsGrammatica.tokensForSentence(tokens, sentence, tokenIndex);
+      var slice = Syntaxer.tokensForSentence(tokens, sentence, tokenIndex);
       renderSentenceView(slice);
       currentSlice = slice;
       renderGraph(slice);
@@ -172,7 +180,7 @@
     // Colored by verbal unit, using the same clustering/palette as the
     // dependency graph below (sentenceMermaidGraph's own coloring), so
     // the same clause reads as the same color in both views.
-    var textResult = ArsGrammatica.sentenceHtml(slice);
+    var textResult = Syntaxer.sentenceHtml(slice);
     viewEl.innerHTML = textResult.html;
     if (textResult.warnings.length > 0) {
       textResult.warnings.forEach(function (warning) {
@@ -190,7 +198,7 @@
 
     var graphResult;
     try {
-      graphResult = ArsGrammatica.sentenceMermaidGraph(slice, { orientation: orientationEl.value });
+      graphResult = Syntaxer.sentenceMermaidGraph(slice, { orientation: orientationEl.value });
     } catch (err) {
       clearGraph();
       setStatus('Error building the graph: ' + err.message, true);

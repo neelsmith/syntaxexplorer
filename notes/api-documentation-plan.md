@@ -33,7 +33,7 @@ themselves.
 ## Current state (as of this session)
 
 - Every exported function in `js/lib/cts-urn.js` and
-  `js/lib/arsgrammatica.js` already has a JSDoc block with
+  `js/lib/syntaxer.js` already has a JSDoc block with
   `@param`/`@returns`. This is the right foundation and should stay
   the source of truth for exact signatures.
 - `notes/library-api.md` is a hand-written narrative reference/guide
@@ -58,7 +58,7 @@ themselves.
    later (see below).
 
 3. **Mark what's public vs. internal.** Everything on the
-   `ArsGrammatica`/`CtsUrn` export objects is the contract; helpers
+   `Syntaxer`/`CtsUrn` export objects is the contract; helpers
    like `computeVerbalUnitColoring`, `escapeHtml`, or
    `cssEscapeAttrValue` are not. A `@private` tag (or at minimum a
    one-line comment marking the "internal helpers" section) keeps that
@@ -66,7 +66,7 @@ themselves.
 
 4. **Document the environment/compatibility contract as its own
    section**, not left implicit: script load order
-   (`cts-urn.js` before `arsgrammatica.js`), the dual
+   (`cts-urn.js` before `syntaxer.js`), the dual
    browser-global/`module.exports` pattern, and the `file://`
    compatibility guarantee. `notes/library-api.md` already covers most
    of this near the top; keep it a required section as the library

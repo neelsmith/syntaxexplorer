@@ -1,10 +1,12 @@
 /**
- * arsgrammatica.js
+ * syntaxer.js
  *
  * Library functions for reading and working with syntactic analyses
- * saved by `arsgrammatica` in its plain-text serialization format
- * (documented at
- * https://neelsmith.github.io/arsgrammatica/reference/analysisformat.html).
+ * saved as plain text in a CEX-style serialization format -- the one
+ * documented at
+ * https://neelsmith.github.io/arsgrammatica/reference/analysisformat.html,
+ * arsgrammatica being one tool (among others that could use the same
+ * general style) that produces it.
  *
  * A saved analysis is a plain-text file made up of one or more blocks.
  * Each block begins with a line of the form `#!blockname`, followed by
@@ -33,11 +35,11 @@
  * below, are written up in notes/library-api.md.
  *
  * Loading:
- *   - In a browser, include with a plain <script src="arsgrammatica.js"></script>
+ *   - In a browser, include with a plain <script src="syntaxer.js"></script>
  *     (no <script type="module">), so pages using this library keep
  *     working when opened directly from disk (a file:// URL) with no
- *     web server. It attaches a single global, `ArsGrammatica`.
- *   - In Node (e.g. for tests), `require('./arsgrammatica.js')` returns
+ *     web server. It attaches a single global, `Syntaxer`.
+ *   - In Node (e.g. for tests), `require('./syntaxer.js')` returns
  *     the same object.
  *   - If `cts-urn.js` is also loaded (as `CtsUrn`), `sentenceLabel` uses
  *     it to compute passage components; otherwise it falls back to a
@@ -121,7 +123,7 @@
   }
 
   /**
-   * Parse the full text of a saved arsgrammatica analysis, extracting
+   * Parse the full text of a saved analysis, extracting
    * the `#!tokens` and `#!sentences` blocks as arrays of row objects.
    *
    * @param {string} text - full contents of a saved analysis file.
@@ -529,7 +531,8 @@
   //
   // A "verbal unit" is a clause-like subtree of a sentence's tokens,
   // anchored by the one token whose own `verbalunit` field names its
-  // own id (arsgrammatica marks exactly one token per clause this way).
+  // own id (a saved analysis marks exactly one token per clause this
+  // way).
   // Every other token in that clause belongs to the same unit, found by
   // walking its `related1`/`related2` chain up to that anchor.
   //
@@ -1121,7 +1124,7 @@
 
   // ---------------------------------------------------------------------
 
-  var ArsGrammatica = {
+  var Syntaxer = {
     splitBlocks: splitBlocks,
     parseDelimitedBlock: parseDelimitedBlock,
     parseAnalysis: parseAnalysis,
@@ -1142,9 +1145,9 @@
     enableTokenHover: enableTokenHover
   };
 
-  global.ArsGrammatica = ArsGrammatica;
+  global.Syntaxer = Syntaxer;
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = ArsGrammatica;
+    module.exports = Syntaxer;
   }
 })(typeof window !== 'undefined' ? window : globalThis);

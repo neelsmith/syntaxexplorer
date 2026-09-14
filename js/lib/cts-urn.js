@@ -14,9 +14,9 @@
  *   4. work component  (identifies the work, e.g. phi0690.phi003.omar)
  *   5. passage component (identifies a passage within the work, e.g. 1.1)
  *
- * This module is deliberately generic: it knows nothing about
- * arsgrammatica analyses, and can be reused in any app that needs to
- * pull apart CTS URNs.
+ * This module is deliberately generic: it knows nothing about the
+ * syntactic-analysis format js/lib/syntaxer.js reads, and can be
+ * reused in any app that needs to pull apart CTS URNs.
  *
  * Loading:
  *   - In a browser, include with a plain <script src="cts-urn.js"></script>

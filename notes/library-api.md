@@ -1,10 +1,11 @@
 # `js/lib/` — reusable library API
 
 This directory holds the reusable JavaScript library for reading and
-working with syntactic analyses saved by `arsgrammatica`. It is written
-so it can be dropped into other web apps unchanged, including apps
-meant to run by opening a single HTML file directly from disk (a
-`file://` URL, no web server).
+working with syntactic analyses saved in a CEX-style plain-text format
+-- `arsgrammatica` being one tool, among possible others, that produces
+it. It is written so it can be dropped into other web apps unchanged,
+including apps meant to run by opening a single HTML file directly
+from disk (a `file://` URL, no web server).
 
 ## Why plain scripts, not ES modules
 
@@ -14,14 +15,14 @@ opened straight from disk instead of through a server. Plain classic
 scripts (`<script src="...">`) don't have that restriction — they load
 fine over `file://`. So every file here:
 
-- attaches its exports to a single global (`CtsUrn`, `ArsGrammatica`) —
+- attaches its exports to a single global (`CtsUrn`, `Syntaxer`) —
   no `import`/`export`;
 - also exports via `module.exports` when `module` exists, so the same
   files load unchanged under Node with `require(...)` (used by
   `test/run.js`).
 
 An app built on top of this library just needs plain `<script src>`
-tags for `js/lib/cts-urn.js` and `js/lib/arsgrammatica.js`, in that
+tags for `js/lib/cts-urn.js` and `js/lib/syntaxer.js`, in that
 order, before its own script. This was verified with an automated
 end-to-end test that opens `apps/sentence-explorer/index.html` as a
 literal `file://` URL in a real browser (headless Chromium) and drives
@@ -29,7 +30,7 @@ it exactly as a user would.
 
 ## `js/lib/cts-urn.js` — global `CtsUrn`
 
-Generic CTS URN helpers, with no knowledge of arsgrammatica. A CTS URN
+Generic CTS URN helpers, with no knowledge of syntactic-analysis data. A CTS URN
 has exactly five colon-delimited components, e.g.
 
 ```
@@ -43,24 +44,25 @@ urn:cts:latinLit:phi0690.phi003.omar:1.1
 - `CtsUrn.workComponent(urn)` — the 4th component (e.g. `phi0690.phi003.omar`).
 - `CtsUrn.passageComponent(urn)` — the 5th/last component (e.g. `1.1`).
 
-## `js/lib/arsgrammatica.js` — global `ArsGrammatica`
+## `js/lib/syntaxer.js` — global `Syntaxer`
 
 ### Parsing a saved analysis file
 
-`arsgrammatica`'s saved-analysis format
-(https://neelsmith.github.io/arsgrammatica/reference/analysisformat.html)
+The saved-analysis format
+(https://neelsmith.github.io/arsgrammatica/reference/analysisformat.html,
+where `arsgrammatica` documents it)
 is a plain-text file of named blocks. Each block starts with a line
 `#!blockname`, followed by a pipe-delimited header row and pipe-delimited
 data rows. Blank lines and `//` comment lines are ignored anywhere.
 
-- `ArsGrammatica.splitBlocks(text)` — low-level: returns
+- `Syntaxer.splitBlocks(text)` — low-level: returns
   `{blockName: [rawLine, ...]}` for every `#!`-introduced block found,
   whatever its internal shape (not every block in the format is a
   simple table — e.g. `#!lm` blocks are `KEY=VALUE` lines, not a pipe
   table — so this step doesn't assume a table shape).
-- `ArsGrammatica.parseDelimitedBlock(lines, delimiter='|')` — turns one
+- `Syntaxer.parseDelimitedBlock(lines, delimiter='|')` — turns one
   block's lines into `{header: [...], rows: [{col: value, ...}, ...]}`.
-- `ArsGrammatica.parseAnalysis(text, {delimiter})` — the function apps
+- `Syntaxer.parseAnalysis(text, {delimiter})` — the function apps
   should normally call. Applies `parseDelimitedBlock` specifically to
   the `#!tokens` and `#!sentences` blocks (the only two this initial
   version needs) and returns:
@@ -74,7 +76,7 @@ data rows. Blank lines and `//` comment lines are ignored anywhere.
   }
   ```
   Because rows are built from whatever header columns are actually in
-  the file, this keeps working if `arsgrammatica` adds/reorders token
+  the file, this keeps working if a producer adds/reorders token
   columns later.
 
 ### Extracting a sentence's tokens
@@ -88,10 +90,10 @@ than one `context` (e.g. a sentence that runs across a line break in
 the source text; see the two-context sentence in
 `test/sample-analysis.cex`).
 
-- `ArsGrammatica.indexTokens(tokens)` — builds a `Map` from
+- `Syntaxer.indexTokens(tokens)` — builds a `Map` from
   `"context␟id"` to array index, so repeated lookups don't each
   need a linear scan. Build once per file, reuse across all sentences.
-- `ArsGrammatica.tokensForSentence(tokens, sentence, tokenIndex?)` —
+- `Syntaxer.tokensForSentence(tokens, sentence, tokenIndex?)` —
   returns the inclusive slice of `tokens` for one sentence. `tokenIndex`
   is optional (one is built on the fly if omitted) but should be passed
   when processing many sentences from the same file. Throws a
@@ -100,11 +102,11 @@ the source text; see the two-context sentence in
 
 ### Rendering text
 
-- `ArsGrammatica.sentenceText(tokenSlice, {noSpaceBefore?})` — the
+- `Syntaxer.sentenceText(tokenSlice, {noSpaceBefore?})` — the
   "black text" (plain surface text) of a run of tokens: each token's
   `text` field concatenated with whitespace inserted between tokens,
   *except* where that would be wrong. The default rule
-  (`ArsGrammatica.defaultNoSpaceBefore`) suppresses the space before a
+  (`Syntaxer.defaultNoSpaceBefore`) suppresses the space before a
   token when:
   - it's the first token in the slice (never a leading space);
   - its `tokentype` is `enclitic` (e.g. `virum` + `que` → `virumque`);
@@ -120,7 +122,7 @@ the source text; see the two-context sentence in
   Pass a different `noSpaceBefore(token, previousToken)` function via
   options to override it for a particular corpus or language.
 
-- `ArsGrammatica.sentenceLabel(tokenSlice, {maxTokens=4, separator=': ', ellipsis='…'})` —
+- `Syntaxer.sentenceLabel(tokenSlice, {maxTokens=4, separator=': ', ellipsis='…'})` —
   a short menu label: the passage component of the *first* token's CTS
   URN (via `CtsUrn.passageComponent`, with a same-behavior fallback if
   `cts-urn.js` isn't loaded), a separator, the `sentenceText` of the
@@ -136,7 +138,7 @@ the source text; see the two-context sentence in
   future version should special-case trailing punctuation, that's a
   deliberate change to make there, not an oversight here.
 
-- `ArsGrammatica.sentenceHtml(tokenSlice, {noSpaceBefore?, excludeTokenTypes=['punctuation'], colorByVerbalUnit=true})` —
+- `Syntaxer.sentenceHtml(tokenSlice, {noSpaceBefore?, excludeTokenTypes=['punctuation'], colorByVerbalUnit=true})` —
   the same "black text" join as `sentenceText`, but returned as
   `{html, warnings}`: an HTML fragment (no wrapping element of its own
   — insert it into a container via `.innerHTML`) with each token whose
@@ -176,7 +178,7 @@ the source text; see the two-context sentence in
 
 #### Hovering a token to see its relations
 
-- `ArsGrammatica.enableTokenHover(container, {tooltip=true, onHover?, onUnhover?})` —
+- `Syntaxer.enableTokenHover(container, {tooltip=true, onHover?, onUnhover?})` —
   wires up hover interactivity on a container holding one or more
   `sentenceHtml`-rendered sentences. Hovering a token span:
   1. highlights that token (a solid outline);
@@ -221,7 +223,7 @@ the source text; see the two-context sentence in
 
 ### Rendering a sentence's dependency relations as a graph
 
-- `ArsGrammatica.sentenceMermaidGraph(tokenSlice, {orientation='BT', excludeTokenTypes=['punctuation'], colorByVerbalUnit=true})` —
+- `Syntaxer.sentenceMermaidGraph(tokenSlice, {orientation='BT', excludeTokenTypes=['punctuation'], colorByVerbalUnit=true})` —
   builds a complete [Mermaid](https://mermaid.js.org/) `graph` definition
   (a flowchart-family diagram) from a sentence's tokens, using the
   `related1`/`relationship1` and `related2`/`relationship2` columns.
@@ -235,7 +237,7 @@ the source text; see the two-context sentence in
     tokens are essentially never meaningful nodes in a dependency graph
     and rarely carry relations of their own; pass `excludeTokenTypes: []`
     to include every token, punctuation included. The default list is
-    also exposed as `ArsGrammatica.defaultExcludedTokenTypes`, the same
+    also exposed as `Syntaxer.defaultExcludedTokenTypes`, the same
     pattern as `validGraphOrientations` below.
   - `relatedN` names another token's `id`; an edge is drawn from the
     token to that target, labelled with `relationshipN` — but only when
@@ -262,7 +264,7 @@ the source text; see the two-context sentence in
     than silently returning an empty diagram.
   - `orientation` must be one of `"TB"`, `"BT"` (the default — root/verb
     typically ends up near the bottom), `"LR"`, `"RL"` — the full list is
-    also exposed as `ArsGrammatica.validGraphOrientations`, so an app can
+    also exposed as `Syntaxer.validGraphOrientations`, so an app can
     build a picker from it instead of hardcoding the list.
   - Node and edge label text is escaped (quotes, backslashes, and, in
     edge labels, the `|` delimiter itself) so a stray character in the
@@ -280,7 +282,7 @@ the source text; see the two-context sentence in
 
 A "verbal unit" is a clause-like subtree of a sentence's tokens,
 anchored by the one token whose own `verbalunit` field names its own
-`id` (arsgrammatica marks exactly one token per clause this way).
+`id` (a saved analysis marks exactly one token per clause this way).
 When `colorByVerbalUnit` is true (the default), every node whose
 tokens resolves to some verbal unit is colored with a `classDef`/`class`
 pair, using the same 8-color pastel palette, in the same order, as
@@ -288,7 +290,7 @@ arsgrammatica's own Python `mermaid.py`
 (https://github.com/neelsmith/arsgrammatica) — so a diagram built here
 looks the same as one built there. Pass `colorByVerbalUnit: false` to
 skip coloring and leave every node with Mermaid's default styling.
-`ArsGrammatica.sentenceHtml` (above, under "Rendering text") applies
+`Syntaxer.sentenceHtml` (above, under "Rendering text") applies
 this exact same clustering and palette to a sentence's running text, so
 a clause's color matches between its graph and its text view.
 
@@ -296,7 +298,7 @@ The clustering itself is exposed as two standalone functions, so an
 app can compute verbal-unit membership or colors without going through
 Mermaid at all:
 
-- `ArsGrammatica.assignVerbalUnits(tokenSlice)` — returns a
+- `Syntaxer.assignVerbalUnits(tokenSlice)` — returns a
   `Map<tokenKey, tokenKey|null>` from every token's own key (see
   `tokenKey(context, id)` below) to the key of the anchor token whose
   verbal unit it belongs to, found by walking each token's
@@ -306,7 +308,7 @@ Mermaid at all:
   unfiltered* token slice — resolution may need to walk through a
   token that would otherwise be excluded from the graph, e.g.
   punctuation.
-- `ArsGrammatica.assignVerbalUnitColors(orderedTokens, assignment)` —
+- `Syntaxer.assignVerbalUnitColors(orderedTokens, assignment)` —
   given tokens in display order and an `assignVerbalUnits` result,
   returns `{colors, order, warnings}`: `colors` maps each distinct
   unit's key to a `{fill, stroke, text}` hex-color triple, assigned in
@@ -315,7 +317,7 @@ Mermaid at all:
   first-appearance list of unit keys; `warnings` contains one message
   if there were more than 8 distinct units (the palette repeats after
   8, which can make two unrelated units look the same color).
-- `ArsGrammatica.verbalUnitPalette` — the 8 `{fill, stroke, text}`
+- `Syntaxer.verbalUnitPalette` — the 8 `{fill, stroke, text}`
   colors themselves, in palette order, for an app that wants to build
   its own legend.
 

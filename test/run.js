@@ -1,5 +1,5 @@
 /**
- * Plain-Node smoke tests for js/lib/cts-urn.js and js/lib/arsgrammatica.js.
+ * Plain-Node smoke tests for js/lib/cts-urn.js and js/lib/syntaxer.js.
  * No test framework or npm dependencies required: run with
  *
  *   node test/run.js
@@ -13,7 +13,7 @@ var fs = require('fs');
 var path = require('path');
 
 var CtsUrn = require('../js/lib/cts-urn.js');
-var ArsGrammatica = require('../js/lib/arsgrammatica.js');
+var Syntaxer = require('../js/lib/syntaxer.js');
 
 var passed = 0;
 function check(name, fn) {
@@ -46,10 +46,10 @@ check('CtsUrn.parse rejects a URN without 5 components', function () {
   }, /5 colon-delimited components/);
 });
 
-// -- ArsGrammatica.parseAnalysis ---------------------------------------
+// -- Syntaxer.parseAnalysis ---------------------------------------
 
 var sampleText = fs.readFileSync(path.join(__dirname, 'sample-analysis.cex'), 'utf8');
-var parsed = ArsGrammatica.parseAnalysis(sampleText);
+var parsed = Syntaxer.parseAnalysis(sampleText);
 
 check('parseAnalysis finds both blocks', function () {
   assert.ok(parsed.blockNames.indexOf('tokens') !== -1);
@@ -77,113 +77,113 @@ check('parseAnalysis ignores comment and blank lines', function () {
 
 // -- tokensForSentence ---------------------------------------------------
 
-var tokenIndex = ArsGrammatica.indexTokens(parsed.tokens);
+var tokenIndex = Syntaxer.indexTokens(parsed.tokens);
 
 check('tokensForSentence extracts the right inclusive slice (single context)', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
   assert.strictEqual(slice.length, 5);
   assert.strictEqual(slice[0].text, 'Arma');
   assert.strictEqual(slice[slice.length - 1].text, '.');
 });
 
 check('tokensForSentence handles a sentence spanning two contexts', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[1], tokenIndex);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[1], tokenIndex);
   assert.strictEqual(slice.length, 7);
   assert.strictEqual(slice[0].text, 'Troiae');
   assert.strictEqual(slice[slice.length - 1].text, '.');
 });
 
 check('tokensForSentence works without a prebuilt index too', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0]);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0]);
   assert.strictEqual(slice.length, 5);
 });
 
 check('tokensForSentence throws a clear error for an unmatched token', function () {
   assert.throws(function () {
-    ArsGrammatica.tokensForSentence(parsed.tokens, { context_begin: 'nope', first_token: 'x', context_end: 'nope', last_token: 'y' }, tokenIndex);
+    Syntaxer.tokensForSentence(parsed.tokens, { context_begin: 'nope', first_token: 'x', context_end: 'nope', last_token: 'y' }, tokenIndex);
   }, /could not find first token/);
 });
 
 // -- sentenceText (black-text view) --------------------------------------
 
 check('sentenceText joins words with spaces, attaches enclitics, and suppresses space before trailing punctuation', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var text = ArsGrammatica.sentenceText(slice);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var text = Syntaxer.sentenceText(slice);
   assert.strictEqual(text, 'Arma virumque cano.');
 });
 
 check('sentenceText handles a longer, multi-context sentence', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[1], tokenIndex);
-  var text = ArsGrammatica.sentenceText(slice);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[1], tokenIndex);
+  var text = Syntaxer.sentenceText(slice);
   assert.strictEqual(text, 'Troiae qui primus ab oris Italiam.');
 });
 
 // -- sentenceLabel (menu label) ------------------------------------------
 
 check('sentenceLabel shows passage + first 4 tokens + ellipsis when truncated', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[1], tokenIndex);
-  var label = ArsGrammatica.sentenceLabel(slice);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[1], tokenIndex);
+  var label = Syntaxer.sentenceLabel(slice);
   assert.strictEqual(label, '1.2: Troiae qui primus ab …');
 });
 
 check('sentenceLabel shows an ellipsis whenever token count exceeds maxTokens, even if only trailing punctuation remains', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var label = ArsGrammatica.sentenceLabel(slice);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var label = Syntaxer.sentenceLabel(slice);
   assert.strictEqual(label, '1.1: Arma virumque cano \u2026');
 });
 
 // -- sentenceMermaidGraph (dependency graph) ------------------------------
 
 check('sentenceMermaidGraph defaults to BT orientation', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   assert.ok(graph.indexOf('graph BT\n') === 0, 'expected graph to start with "graph BT", got: ' + JSON.stringify(graph.slice(0, 20)));
 });
 
-check('ArsGrammatica.defaultExcludedTokenTypes exposes the default exclusion list', function () {
-  assert.deepStrictEqual(ArsGrammatica.defaultExcludedTokenTypes, ['punctuation']);
+check('Syntaxer.defaultExcludedTokenTypes exposes the default exclusion list', function () {
+  assert.deepStrictEqual(Syntaxer.defaultExcludedTokenTypes, ['punctuation']);
 });
 
 check('sentenceMermaidGraph accepts TB/LR/RL orientation', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
   ['TB', 'LR', 'RL'].forEach(function (orientation) {
-    var graph = ArsGrammatica.sentenceMermaidGraph(slice, { orientation: orientation }).diagram;
+    var graph = Syntaxer.sentenceMermaidGraph(slice, { orientation: orientation }).diagram;
     assert.ok(graph.indexOf('graph ' + orientation + '\n') === 0);
   });
 });
 
 check('sentenceMermaidGraph rejects an invalid orientation', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
   assert.throws(function () {
-    ArsGrammatica.sentenceMermaidGraph(slice, { orientation: 'DIAGONAL' });
+    Syntaxer.sentenceMermaidGraph(slice, { orientation: 'DIAGONAL' });
   }, /invalid orientation/);
 });
 
 check('sentenceMermaidGraph rejects an empty token slice', function () {
   assert.throws(function () {
-    ArsGrammatica.sentenceMermaidGraph([]);
+    Syntaxer.sentenceMermaidGraph([]);
   }, /token slice is empty/);
 });
 
 check('sentenceMermaidGraph declares one node per non-punctuation token, labelled with its text', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   ['Arma', 'virum', 'que', 'cano'].forEach(function (text, i) {
     assert.ok(graph.indexOf('n' + i + '["' + text + '"]') !== -1, 'missing node for "' + text + '" in:\n' + graph);
   });
 });
 
 check('sentenceMermaidGraph excludes punctuation tokens by default', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   assert.strictEqual(graph.indexOf('["."]'), -1, 'a node for the period should not be present by default:\n' + graph);
   var nodeCount = (graph.match(/^  n\d+\[/gm) || []).length;
   assert.strictEqual(nodeCount, 4, 'expected 4 nodes (punctuation excluded), got ' + nodeCount + ':\n' + graph);
 });
 
 check('sentenceMermaidGraph can include punctuation via excludeTokenTypes: []', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice, { excludeTokenTypes: [] }).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = Syntaxer.sentenceMermaidGraph(slice, { excludeTokenTypes: [] }).diagram;
   assert.ok(graph.indexOf('["."]') !== -1, 'expected a node for the period when excludeTokenTypes is empty:\n' + graph);
   var nodeCount = (graph.match(/^  n\d+\[/gm) || []).length;
   assert.strictEqual(nodeCount, 5, 'expected 5 nodes (nothing excluded), got ' + nodeCount + ':\n' + graph);
@@ -194,7 +194,7 @@ check('sentenceMermaidGraph drops an edge whose relatedN points at an excluded (
     { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: 'foo', related1: 't1', relationship1: 'points at punctuation' },
     { context: 'urn:cts:test:work:1', id: 't1', tokentype: 'punctuation', text: '.' }
   ];
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   assert.strictEqual((graph.match(/^  n\d+\[/gm) || []).length, 1, 'expected only the non-punctuation token as a node:\n' + graph);
   assert.strictEqual(graph.indexOf('-->'), -1, 'expected no edge, since its only target was excluded:\n' + graph);
 });
@@ -204,13 +204,13 @@ check('sentenceMermaidGraph throws if excludeTokenTypes removes every token', fu
     { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'punctuation', text: '.' }
   ];
   assert.throws(function () {
-    ArsGrammatica.sentenceMermaidGraph(slice);
+    Syntaxer.sentenceMermaidGraph(slice);
   }, /no tokens remain after excluding tokentypes/);
 });
 
 check('sentenceMermaidGraph draws edges for related1/relationship1 and related2/relationship2', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   // arma (n0) and virum (n1) are both direct objects of cano (n3)
   assert.ok(graph.indexOf('n0 -->|direct object| n3') !== -1, graph);
   assert.ok(graph.indexOf('n1 -->|direct object| n3') !== -1, graph);
@@ -220,16 +220,16 @@ check('sentenceMermaidGraph draws edges for related1/relationship1 and related2/
 });
 
 check('sentenceMermaidGraph skips a related1 value that does not resolve to a token in the sentence (e.g. the "root" sentinel)', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   // cano (n3, related1="root") must not produce an edge to a fabricated "root" node
   assert.strictEqual(graph.indexOf('-->|unit verb|'), -1, 'should not have turned the "root" sentinel into an edge:\n' + graph);
   assert.strictEqual(graph.indexOf('"root"'), -1, 'should not have turned the "root" sentinel into a node label:\n' + graph);
 });
 
 check('sentenceMermaidGraph resolves related ids within each token\'s own context (sentence spanning two contexts)', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[1], tokenIndex);
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[1], tokenIndex);
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   // Troiae (n0, context 1.2) and qui (n1, context 1.2) both relate to primus (n2, context 1.2)
   assert.ok(graph.indexOf('n0 -->|place from which| n2') !== -1, graph);
   assert.ok(graph.indexOf('n1 -->|subject| n2') !== -1, graph);
@@ -247,7 +247,7 @@ check('sentenceMermaidGraph escapes quotes and pipes so they cannot break the di
     { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: 'foo"bar', related1: 't1', relationship1: 'weird|label' },
     { context: 'urn:cts:test:work:1', id: 't1', tokentype: 'lexical', text: 'baz' }
   ];
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   assert.ok(graph.indexOf('foo&quot;bar') !== -1, graph);
   assert.ok(graph.indexOf('weird/label') !== -1, graph);
   assert.strictEqual(graph.indexOf('foo"bar'), -1, graph);
@@ -255,8 +255,8 @@ check('sentenceMermaidGraph escapes quotes and pipes so they cannot break the di
 });
 
 check('sentenceMermaidGraph returns {diagram, warnings}, with warnings empty when nothing is amiss', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var result = ArsGrammatica.sentenceMermaidGraph(slice);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var result = Syntaxer.sentenceMermaidGraph(slice);
   assert.strictEqual(typeof result.diagram, 'string');
   assert.deepStrictEqual(result.warnings, []);
 });
@@ -265,9 +265,9 @@ check('sentenceMermaidGraph returns {diagram, warnings}, with warnings empty whe
 
 var VU_CONTEXT = 'urn:cts:test:work:1';
 
-check('ArsGrammatica.verbalUnitPalette exposes 8 pastel {fill, stroke, text} colors', function () {
-  assert.strictEqual(ArsGrammatica.verbalUnitPalette.length, 8);
-  ArsGrammatica.verbalUnitPalette.forEach(function (color) {
+check('Syntaxer.verbalUnitPalette exposes 8 pastel {fill, stroke, text} colors', function () {
+  assert.strictEqual(Syntaxer.verbalUnitPalette.length, 8);
+  Syntaxer.verbalUnitPalette.forEach(function (color) {
     assert.ok(/^#[0-9a-f]{6}$/i.test(color.fill), JSON.stringify(color));
     assert.ok(/^#[0-9a-f]{6}$/i.test(color.stroke), JSON.stringify(color));
     assert.ok(/^#[0-9a-f]{6}$/i.test(color.text), JSON.stringify(color));
@@ -275,8 +275,8 @@ check('ArsGrammatica.verbalUnitPalette exposes 8 pastel {fill, stroke, text} col
 });
 
 check('assignVerbalUnits assigns every token in a single clause to its anchor\'s unit', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var assignment = ArsGrammatica.assignVerbalUnits(slice);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var assignment = Syntaxer.assignVerbalUnits(slice);
   var canoKey = slice[3].context + '\u241F' + slice[3].id; // cano is its own anchor
   // Every word (Arma, virum, que, cano) belongs to cano's unit; the
   // trailing period (last in the slice) has no relatedN of its own at
@@ -292,15 +292,15 @@ check('assignVerbalUnits assigns every token in a single clause to its anchor\'s
 });
 
 check('sentenceMermaidGraph colors every node of a single-clause sentence with one classDef/class pair', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   assert.ok(graph.indexOf('classDef vu0 fill:#82bbff,stroke:#2a78d6,color:#000000;') !== -1, graph);
   assert.ok(graph.indexOf('class n0,n1,n2,n3 vu0;') !== -1, graph);
 });
 
 check('colorByVerbalUnit: false omits all classDef/class styling', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice, { colorByVerbalUnit: false }).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = Syntaxer.sentenceMermaidGraph(slice, { colorByVerbalUnit: false }).diagram;
   assert.strictEqual(graph.indexOf('classDef'), -1, graph);
   assert.strictEqual(graph.indexOf('class n'), -1, graph);
 });
@@ -313,7 +313,7 @@ check('multiple verbal units get distinct colors in first-appearance order among
     { context: VU_CONTEXT, id: 't0', tokentype: 'lexical', text: 'firstclause', verbalunit: 't0' },
     { context: VU_CONTEXT, id: 't1', tokentype: 'lexical', text: 'secondclause', verbalunit: 't1' }
   ];
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   assert.ok(graph.indexOf('classDef vu0 fill:#82bbff,stroke:#2a78d6,color:#000000;') !== -1, graph);
   assert.ok(graph.indexOf('class n0 vu0;') !== -1, graph);
   assert.ok(graph.indexOf('classDef vu1 fill:#ffa682,stroke:#eb6834,color:#000000;') !== -1, graph);
@@ -325,7 +325,7 @@ check('a token with no reachable verbal-unit anchor gets no classDef/class styli
     { context: VU_CONTEXT, id: 't0', tokentype: 'lexical', text: 'anchored', verbalunit: 't0' },
     { context: VU_CONTEXT, id: 't1', tokentype: 'lexical', text: 'unanchored' }
   ];
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   assert.ok(graph.indexOf('class n0 vu0;') !== -1, graph);
   assert.strictEqual(graph.indexOf('n1 vu'), -1, 'the unanchored token should not appear in any class line:\n' + graph);
 });
@@ -341,7 +341,7 @@ check('assignVerbalUnits: "unit verb" reverse link lets a clause verb claim a co
     { context: VU_CONTEXT, id: 't2', tokentype: 'lexical', text: 'regnat', verbalunit: 't2', related1: 'root', relationship1: 'unit verb' },
     { context: VU_CONTEXT, id: 't3', tokentype: 'lexical', text: 'venit', verbalunit: 't3', related1: 't1', relationship1: 'unit verb' }
   ];
-  var assignment = ArsGrammatica.assignVerbalUnits(slice);
+  var assignment = Syntaxer.assignVerbalUnits(slice);
   var key = function (i) { return VU_CONTEXT + '\u241F' + 't' + i; };
   assert.strictEqual(assignment.get(key(0)), key(2), 'vir should belong to regnat\'s unit');
   assert.strictEqual(assignment.get(key(1)), key(3), 'qui should belong to venit\'s unit via the "unit verb" reverse link, not vir\'s outward-pointing relation');
@@ -361,7 +361,7 @@ check('assignVerbalUnits: an "ablative absolute" token is pulled into the partic
     { context: VU_CONTEXT, id: 't3', tokentype: 'lexical', text: 'milites', related1: 't4', relationship1: 'subject' },
     { context: VU_CONTEXT, id: 't4', tokentype: 'lexical', text: 'discesserunt', verbalunit: 't4', related1: 'root', relationship1: 'unit verb' }
   ];
-  var assignment = ArsGrammatica.assignVerbalUnits(slice);
+  var assignment = Syntaxer.assignVerbalUnits(slice);
   var key = function (i) { return VU_CONTEXT + '\u241F' + 't' + i; };
   assert.strictEqual(assignment.get(key(0)), key(2), 'urbe should be pulled into captis\'s unit via the ablative-absolute wrinkle');
   assert.strictEqual(assignment.get(key(1)), null, 'castris has no path to any anchor and should stay unresolved');
@@ -373,7 +373,7 @@ check('assignVerbalUnits does not loop forever on a relation cycle with no ancho
     { context: VU_CONTEXT, id: 't0', tokentype: 'lexical', text: 'a', related1: 't1', relationship1: 'x' },
     { context: VU_CONTEXT, id: 't1', tokentype: 'lexical', text: 'b', related1: 't0', relationship1: 'y' }
   ];
-  var assignment = ArsGrammatica.assignVerbalUnits(slice);
+  var assignment = Syntaxer.assignVerbalUnits(slice);
   var key = function (i) { return VU_CONTEXT + '\u241F' + 't' + i; };
   assert.strictEqual(assignment.get(key(0)), null);
   assert.strictEqual(assignment.get(key(1)), null);
@@ -384,7 +384,7 @@ check('more than 8 distinct verbal units triggers a warning and cycles the palet
   for (var i = 0; i < 9; i++) {
     slice.push({ context: VU_CONTEXT, id: 't' + i, tokentype: 'lexical', text: 'w' + i, verbalunit: 't' + i });
   }
-  var result = ArsGrammatica.sentenceMermaidGraph(slice);
+  var result = Syntaxer.sentenceMermaidGraph(slice);
   assert.strictEqual(result.warnings.length, 1);
   assert.ok(/9 verbal units but only 8 distinct colors/.test(result.warnings[0]), result.warnings[0]);
   // the 9th unit (index 8) reuses the palette's first color (index 8 % 8 === 0)
@@ -396,8 +396,8 @@ check('assignVerbalUnitColors can be called directly on a token list and an assi
     { context: VU_CONTEXT, id: 't0', tokentype: 'lexical', text: 'a', verbalunit: 't0' },
     { context: VU_CONTEXT, id: 't1', tokentype: 'punctuation', text: '.' }
   ];
-  var assignment = ArsGrammatica.assignVerbalUnits(slice);
-  var colorResult = ArsGrammatica.assignVerbalUnitColors(slice, assignment);
+  var assignment = Syntaxer.assignVerbalUnits(slice);
+  var colorResult = Syntaxer.assignVerbalUnitColors(slice, assignment);
   assert.strictEqual(colorResult.order.length, 1);
   assert.deepStrictEqual(colorResult.warnings, []);
   var key = VU_CONTEXT + '\u241F' + 't0';
@@ -407,22 +407,22 @@ check('assignVerbalUnitColors can be called directly on a token list and an assi
 // -- sentenceHtml (colored-by-verbal-unit text view) --------------------
 
 check('sentenceHtml matches sentenceText\'s wording and spacing exactly, once tags are stripped', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var plainText = ArsGrammatica.sentenceText(slice);
-  var htmlResult = ArsGrammatica.sentenceHtml(slice);
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var plainText = Syntaxer.sentenceText(slice);
+  var htmlResult = Syntaxer.sentenceHtml(slice);
   var stripped = htmlResult.html.replace(/<[^>]+>/g, '');
   assert.strictEqual(stripped, plainText);
 });
 
 check('sentenceHtml rejects an empty token slice', function () {
   assert.throws(function () {
-    ArsGrammatica.sentenceHtml([]);
+    Syntaxer.sentenceHtml([]);
   }, /token slice is empty/);
 });
 
 check('sentenceHtml wraps every token -- including punctuation -- in a span, coloring only those with a resolved verbal unit', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var html = ArsGrammatica.sentenceHtml(slice).html;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = Syntaxer.sentenceHtml(slice).html;
   ['Arma', 'virum', 'que', 'cano'].forEach(function (text) {
     var re = new RegExp('<span class="ag-token vu vu0"[^>]*style="background-color:#82bbff;color:#000000;border:1px solid #2a78d6;[^"]*">' + text + '</span>');
     assert.ok(re.test(html), 'missing colored span for "' + text + '" in:\n' + html);
@@ -435,16 +435,16 @@ check('sentenceHtml wraps every token -- including punctuation -- in a span, col
 });
 
 check('sentenceHtml colors match sentenceMermaidGraph\'s colors for the same sentence', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var html = ArsGrammatica.sentenceHtml(slice).html;
-  var graph = ArsGrammatica.sentenceMermaidGraph(slice).diagram;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = Syntaxer.sentenceHtml(slice).html;
+  var graph = Syntaxer.sentenceMermaidGraph(slice).diagram;
   assert.ok(graph.indexOf('classDef vu0 fill:#82bbff,stroke:#2a78d6,color:#000000;') !== -1, graph);
   assert.ok(html.indexOf('background-color:#82bbff;color:#000000;border:1px solid #2a78d6') !== -1, html);
 });
 
 check('colorByVerbalUnit: false on sentenceHtml keeps every span (for hover) but omits all color classes/styles', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var html = ArsGrammatica.sentenceHtml(slice, { colorByVerbalUnit: false }).html;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = Syntaxer.sentenceHtml(slice, { colorByVerbalUnit: false }).html;
   assert.strictEqual(html.indexOf('vu'), -1, 'expected no "vu"/"vuN" class anywhere:\n' + html);
   assert.strictEqual(html.indexOf('style='), -1, 'expected no inline style anywhere:\n' + html);
   assert.strictEqual((html.match(/<span/g) || []).length, 5, html);
@@ -455,7 +455,7 @@ check('sentenceHtml HTML-escapes token text so it cannot inject markup', functio
   var slice = [
     { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: '<b>&"\'</b>' }
   ];
-  var html = ArsGrammatica.sentenceHtml(slice).html;
+  var html = Syntaxer.sentenceHtml(slice).html;
   assert.strictEqual(html.indexOf('<b>'), -1, html);
   assert.ok(html.indexOf('&lt;b&gt;&amp;&quot;&#39;&lt;/b&gt;') !== -1, html);
 });
@@ -465,7 +465,7 @@ check('sentenceHtml: a token with no reachable verbal-unit anchor still gets a s
     { context: VU_CONTEXT, id: 't0', tokentype: 'lexical', text: 'anchored', verbalunit: 't0' },
     { context: VU_CONTEXT, id: 't1', tokentype: 'lexical', text: 'unanchored' }
   ];
-  var html = ArsGrammatica.sentenceHtml(slice).html;
+  var html = Syntaxer.sentenceHtml(slice).html;
   assert.strictEqual((html.match(/<span/g) || []).length, 2, html);
   assert.ok(/<span class="ag-token" [^>]*>unanchored<\/span>/.test(html), 'expected "unanchored" to be an uncolored span:\n' + html);
 });
@@ -475,23 +475,23 @@ check('sentenceHtml surfaces the same >8-verbal-units warning as sentenceMermaid
   for (var i = 0; i < 9; i++) {
     slice.push({ context: VU_CONTEXT, id: 't' + i, tokentype: 'lexical', text: 'w' + i, verbalunit: 't' + i });
   }
-  var result = ArsGrammatica.sentenceHtml(slice);
+  var result = Syntaxer.sentenceHtml(slice);
   assert.strictEqual(result.warnings.length, 1);
   assert.ok(/9 verbal units but only 8 distinct colors/.test(result.warnings[0]), result.warnings[0]);
 });
 
 check('sentenceHtml respects a custom noSpaceBefore option, same as sentenceText', function () {
   var alwaysSpace = function () { return false; };
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var html = ArsGrammatica.sentenceHtml(slice, { noSpaceBefore: alwaysSpace, colorByVerbalUnit: false }).html;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = Syntaxer.sentenceHtml(slice, { noSpaceBefore: alwaysSpace, colorByVerbalUnit: false }).html;
   assert.strictEqual(html.replace(/<[^>]+>/g, ''), ' Arma virum que cano .');
 });
 
 // -- sentenceHtml hover data attributes (data-context/data-id/data-relatedN-id/data-relationshipN) --
 
 check('sentenceHtml tags every span with data-context and data-id', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var html = ArsGrammatica.sentenceHtml(slice).html;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = Syntaxer.sentenceHtml(slice).html;
   slice.forEach(function (token) {
     var re = new RegExp('data-context="' + token.context + '" data-id="' + token.id + '"');
     assert.ok(re.test(html), 'missing data-context/data-id for ' + token.id + ' in:\n' + html);
@@ -499,8 +499,8 @@ check('sentenceHtml tags every span with data-context and data-id', function () 
 });
 
 check('sentenceHtml tags a span with data-relatedN-id/data-relationshipN when relatedN resolves to a token in the slice', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var html = ArsGrammatica.sentenceHtml(slice).html;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = Syntaxer.sentenceHtml(slice).html;
   // Arma (t0) -> direct object -> cano (t3)
   assert.ok(/data-id="t0"[^>]*data-related1-id="t3" data-relationship1="direct object"/.test(html), html);
   // que (t2) has two relations: -> t0 and -> t1, both "coordinating conjunction"
@@ -508,8 +508,8 @@ check('sentenceHtml tags a span with data-relatedN-id/data-relationshipN when re
 });
 
 check('sentenceHtml omits data-relatedN-id for the "root" sentinel or an unresolvable id', function () {
-  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
-  var html = ArsGrammatica.sentenceHtml(slice).html;
+  var slice = Syntaxer.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var html = Syntaxer.sentenceHtml(slice).html;
   // cano (t3) has related1="root" -- must not produce a data-related1-id at all
   var canoSpan = html.match(/<span[^>]*data-id="t3"[^>]*>/)[0];
   assert.strictEqual(canoSpan.indexOf('data-related1-id'), -1, canoSpan);
@@ -517,7 +517,7 @@ check('sentenceHtml omits data-relatedN-id for the "root" sentinel or an unresol
   var slice2 = [
     { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: 'foo', related1: 'nope', relationship1: 'x' }
   ];
-  var html2 = ArsGrammatica.sentenceHtml(slice2).html;
+  var html2 = Syntaxer.sentenceHtml(slice2).html;
   assert.strictEqual(html2.indexOf('data-related1-id'), -1, html2);
 });
 
@@ -526,7 +526,7 @@ check('sentenceHtml resolves relatedN for hover even when the target is punctuat
     { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: 'foo', related1: 't1', relationship1: 'points at punctuation' },
     { context: 'urn:cts:test:work:1', id: 't1', tokentype: 'punctuation', text: '.' }
   ];
-  var html = ArsGrammatica.sentenceHtml(slice).html;
+  var html = Syntaxer.sentenceHtml(slice).html;
   assert.ok(/data-id="t0"[^>]*data-related1-id="t1" data-relationship1="points at punctuation"/.test(html), html);
 });
 
@@ -534,7 +534,7 @@ check('sentenceHtml resolves relatedN for hover even when the target is punctuat
 
 check('enableTokenHover throws outside a browser DOM', function () {
   assert.throws(function () {
-    ArsGrammatica.enableTokenHover({});
+    Syntaxer.enableTokenHover({});
   }, /requires a browser DOM/);
 });
 
@@ -543,7 +543,7 @@ check('enableTokenHover throws without a container', function () {
   global.document = {}; // fake just enough to get past the DOM guard
   try {
     assert.throws(function () {
-      ArsGrammatica.enableTokenHover(null);
+      Syntaxer.enableTokenHover(null);
     }, /container is required/);
   } finally {
     if (originalDocument === undefined) {

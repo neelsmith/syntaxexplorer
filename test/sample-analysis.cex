@@ -1,4 +1,4 @@
-// Synthetic sample analysis file for testing the arsgrammatica.js and
+// Synthetic sample analysis file for testing the syntaxer.js and
 // cts-urn.js libraries. Two short sentences from the opening of the
 // Aeneid, tokenized and (loosely, for test purposes) analyzed in the
 // format documented at

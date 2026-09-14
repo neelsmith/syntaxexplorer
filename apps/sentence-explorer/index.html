@@ -35,6 +35,14 @@
   h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
   h2 { font-size: 1rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0 0 0.35rem 0; color: var(--muted); font-weight: 600; }
   .subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 0; }
+  #app-footer {
+    color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.75rem;
+    margin-top: 2.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
   .file-row {
     display: flex;
     flex-wrap: wrap;
@@ -163,7 +171,7 @@
 </head>
 <body>
   <h1>Syntax Explorer</h1>
-  <p class="subtitle">Browse the sentences of a syntactic analysis saved by <code>arsgrammatica</code>.</p>
+  <p class="subtitle">Browse the sentences of a saved syntactic analysis.</p>
 
   <div class="file-row">
     <input type="file" id="file-input" accept=".txt,.cex,text/plain">
@@ -196,6 +204,8 @@
     </div>
   </div>
 
+  <footer id="app-footer"></footer>
+
   <!--
     Plain, non-module scripts on purpose: this lets the page be opened
     directly from disk (a file:// URL) with no web server, and lets
@@ -207,8 +217,9 @@
     each) so the graph renders and can be panned/zoomed with no network
     access and no build step, the same as the rest of the app.
   -->
+  <script src="../../js/version.js"></script>
   <script src="../../js/lib/cts-urn.js"></script>
-  <script src="../../js/lib/arsgrammatica.js"></script>
+  <script src="../../js/lib/syntaxer.js"></script>
   <script src="../../js/vendor/mermaid/mermaid.min.js"></script>
   <script src="../../js/vendor/svg-pan-zoom/svg-pan-zoom.min.js"></script>
   <script src="app.js"></script>

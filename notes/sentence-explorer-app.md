@@ -1,15 +1,16 @@
 # `apps/sentence-explorer/` — first app built on the library
 
-A minimal single-page app that lets a user pick a local `arsgrammatica`
-saved-analysis file, browse its sentences, and view each sentence's
-dependency relations as a graph. It's meant both as a usable tool and
-as a worked example of building an app on `js/lib/`.
+A minimal single-page app that lets a user pick a local saved-analysis
+file (in the CEX-style format `arsgrammatica` and similar tools
+produce), browse its sentences, and view each sentence's dependency
+relations as a graph. It's meant both as a usable tool and as a worked
+example of building an app on `js/lib/`.
 
 ## Opening it
 
 Just open `apps/sentence-explorer/index.html` directly in a browser
 (double-click it, or drag it into a browser window) — no server, no
-build step. It loads `../../js/lib/cts-urn.js`, `../../js/lib/arsgrammatica.js`,
+build step. It loads `../../js/lib/cts-urn.js`, `../../js/lib/syntaxer.js`,
 and `../../js/vendor/mermaid/mermaid.min.js` via plain relative
 `<script src>` tags, which works over `file://` (see notes/library-api.md
 for why this matters and how it was verified).
@@ -24,22 +25,22 @@ wherever those end up.
 
 1. `<input type="file">` lets the user pick a local text file (no
    upload — `FileReader` reads it directly in the browser).
-2. The file's text is handed to `ArsGrammatica.parseAnalysis`.
+2. The file's text is handed to `Syntaxer.parseAnalysis`.
 3. A menu (`<select>`) is built with one option per sentence, labelled
-   by `ArsGrammatica.sentenceLabel` (passage component + preview of the
+   by `Syntaxer.sentenceLabel` (passage component + preview of the
    first 4 tokens + `…` if the sentence is longer) — exactly the label
    format the project calls for.
 4. Selecting a sentence computes its full token slice with
-   `ArsGrammatica.tokensForSentence`, shows its full black-text view —
-   via `ArsGrammatica.sentenceHtml`, so each word is colored by the
+   `Syntaxer.tokensForSentence`, shows its full black-text view —
+   via `Syntaxer.sentenceHtml`, so each word is colored by the
    verbal unit (clause-like subtree) it belongs to, using the exact
    same clustering and palette as the dependency graph below, not
-   `ArsGrammatica.sentenceText` directly (that still underlies it: the
+   `Syntaxer.sentenceText` directly (that still underlies it: the
    wording and spacing are identical, just wrapped in colored `<span>`s
    — see notes/library-api.md) — and renders its dependency graph.
    Hovering any word highlights it, highlights whatever other word(s)
    it's directly related to, and shows a small tooltip naming each
-   relationship — `ArsGrammatica.enableTokenHover`, wired up once on
+   relationship — `Syntaxer.enableTokenHover`, wired up once on
    `#sentence-view` at startup (`app.js` never has to call it again,
    even after the panel's content is replaced by a later sentence
    selection); see notes/library-api.md.
@@ -47,7 +48,7 @@ wherever those end up.
    next to the sentence menu — a "Dependency graph" section has an
    orientation picker (Bottom-to-top/BT, the default, Top-to-bottom/TB,
    Left-to-right/LR, Right-to-left/RL — options mirror
-   `ArsGrammatica.validGraphOrientations`) and the rendered graph
+   `Syntaxer.validGraphOrientations`) and the rendered graph
    itself. Changing orientation re-renders the currently-selected
    sentence's graph without needing to reselect it. Punctuation tokens
    (periods, commas, etc.) are left out of the graph, since they're
@@ -70,7 +71,7 @@ wherever those end up.
 
 `app.js` is intentionally just DOM wiring — reading the file, filling
 in the menu, reacting to selection and to orientation changes, calling
-Mermaid to turn `ArsGrammatica.sentenceMermaidGraph`'s text output into
+Mermaid to turn `Syntaxer.sentenceMermaidGraph`'s text output into
 an SVG, and showing readable error messages if a file doesn't have the
 expected blocks or a sentence's token references don't resolve. All of
 the file-format knowledge, text logic, and graph-building logic live in
