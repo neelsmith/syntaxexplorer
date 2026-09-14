@@ -132,4 +132,87 @@ check('sentenceLabel shows an ellipsis whenever token count exceeds maxTokens, e
   assert.strictEqual(label, '1.1: Arma virumque cano \u2026');
 });
 
+// -- sentenceMermaidGraph (dependency graph) ------------------------------
+
+check('sentenceMermaidGraph defaults to BT orientation', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice);
+  assert.ok(graph.indexOf('graph BT\n') === 0, 'expected graph to start with "graph BT", got: ' + JSON.stringify(graph.slice(0, 20)));
+});
+
+check('sentenceMermaidGraph accepts TB/LR/RL orientation', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  ['TB', 'LR', 'RL'].forEach(function (orientation) {
+    var graph = ArsGrammatica.sentenceMermaidGraph(slice, { orientation: orientation });
+    assert.ok(graph.indexOf('graph ' + orientation + '\n') === 0);
+  });
+});
+
+check('sentenceMermaidGraph rejects an invalid orientation', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  assert.throws(function () {
+    ArsGrammatica.sentenceMermaidGraph(slice, { orientation: 'DIAGONAL' });
+  }, /invalid orientation/);
+});
+
+check('sentenceMermaidGraph rejects an empty token slice', function () {
+  assert.throws(function () {
+    ArsGrammatica.sentenceMermaidGraph([]);
+  }, /token slice is empty/);
+});
+
+check('sentenceMermaidGraph declares one node per token, labelled with its text', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice);
+  ['Arma', 'virum', 'que', 'cano', '.'].forEach(function (text, i) {
+    assert.ok(graph.indexOf('n' + i + '["' + text + '"]') !== -1, 'missing node for "' + text + '" in:\n' + graph);
+  });
+});
+
+check('sentenceMermaidGraph draws edges for related1/relationship1 and related2/relationship2', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice);
+  // arma (n0) and virum (n1) are both direct objects of cano (n3)
+  assert.ok(graph.indexOf('n0 -->|direct object| n3') !== -1, graph);
+  assert.ok(graph.indexOf('n1 -->|direct object| n3') !== -1, graph);
+  // que (n2) coordinates both arma (n0) and virum (n1) via its two related/relationship pairs
+  assert.ok(graph.indexOf('n2 -->|coordinating conjunction| n0') !== -1, graph);
+  assert.ok(graph.indexOf('n2 -->|coordinating conjunction| n1') !== -1, graph);
+});
+
+check('sentenceMermaidGraph skips a related1 value that does not resolve to a token in the sentence (e.g. the "root" sentinel)', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[0], tokenIndex);
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice);
+  // cano (n3, related1="root") must not produce an edge to a fabricated "root" node
+  assert.strictEqual(graph.indexOf('-->|unit verb|'), -1, 'should not have turned the "root" sentinel into an edge:\n' + graph);
+  assert.strictEqual(graph.indexOf('"root"'), -1, 'should not have turned the "root" sentinel into a node label:\n' + graph);
+});
+
+check('sentenceMermaidGraph resolves related ids within each token\'s own context (sentence spanning two contexts)', function () {
+  var slice = ArsGrammatica.tokensForSentence(parsed.tokens, parsed.sentences[1], tokenIndex);
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice);
+  // Troiae (n0, context 1.2) and qui (n1, context 1.2) both relate to primus (n2, context 1.2)
+  assert.ok(graph.indexOf('n0 -->|place from which| n2') !== -1, graph);
+  assert.ok(graph.indexOf('n1 -->|subject| n2') !== -1, graph);
+  // ab (n3, context 1.3) relates to oris (n4, context 1.3) within the same context
+  assert.ok(graph.indexOf('n3 -->|preposition| n4') !== -1, graph);
+  // exactly 3 edges: nothing in context 1.3 can resolve back to primus in 1.2
+  // (a bare token id is only unique - and therefore only resolvable - within
+  // its own context), so no 4th edge should appear.
+  var edgeCount = (graph.match(/-->/g) || []).length;
+  assert.strictEqual(edgeCount, 3, 'expected exactly 3 edges, got ' + edgeCount + ':\n' + graph);
+});
+
+check('sentenceMermaidGraph escapes quotes and pipes so they cannot break the diagram syntax', function () {
+  var slice = [
+    { context: 'urn:cts:test:work:1', id: 't0', tokentype: 'lexical', text: 'foo"bar', related1: 't1', relationship1: 'weird|label' },
+    { context: 'urn:cts:test:work:1', id: 't1', tokentype: 'lexical', text: 'baz' }
+  ];
+  var graph = ArsGrammatica.sentenceMermaidGraph(slice);
+  assert.ok(graph.indexOf('foo&quot;bar') !== -1, graph);
+  assert.ok(graph.indexOf('weird/label') !== -1, graph);
+  assert.strictEqual(graph.indexOf('foo"bar'), -1, graph);
+  assert.strictEqual(graph.indexOf('weird|label'), -1, graph);
+});
+
 console.log('\n' + passed + ' check(s) passed.');

@@ -354,6 +354,101 @@
   }
 
   // ---------------------------------------------------------------------
+  // Rendering a sentence's dependency relations as a Mermaid graph
+  // ---------------------------------------------------------------------
+
+  var VALID_GRAPH_ORIENTATIONS = ['TB', 'BT', 'LR', 'RL'];
+
+  function sanitizeMermaidText(text) {
+    return String(text)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '&quot;')
+      .replace(/[\r\n]+/g, ' ')
+      .trim();
+  }
+
+  function sanitizeMermaidEdgeLabel(text) {
+    return sanitizeMermaidText(text).replace(/\|/g, '/');
+  }
+
+  /**
+   * Build a Mermaid `graph` definition showing a sentence's internal
+   * syntactic relations, using the `related1`/`relationship1` and
+   * `related2`/`relationship2` columns of its tokens: `relatedN` names
+   * the `id` (within that token's own `context`) of another token in
+   * the sentence it connects to, and `relationshipN` labels that
+   * connection.
+   *
+   * Every token in `tokenSlice` becomes a node (labelled with its
+   * surface `text`), whether or not it has any relations of its own
+   * (punctuation tokens typically don't). An edge is drawn for each
+   * `relatedN` value that resolves to another token in the same
+   * sentence (matched by that token's own `context` plus the `relatedN`
+   * id, since ids are only guaranteed unique within a context); a
+   * `relatedN` value that does not resolve to any token in the slice
+   * (for example, a sentinel value such as "root" that some analyses
+   * use to flag a sentence's syntactic root) is left out rather than
+   * fabricating a node for it.
+   *
+   * @param {Object[]} tokenSlice - full ordered token slice for one
+   *   sentence, e.g. as returned by tokensForSentence. Must be non-empty.
+   * @param {{orientation?: string}} [options] - orientation is one of
+   *   "TB", "BT" (default), "LR", "RL".
+   * @returns {string} a complete Mermaid `graph` definition.
+   */
+  function sentenceMermaidGraph(tokenSlice, options) {
+    options = options || {};
+    var orientation = options.orientation || 'BT';
+    if (VALID_GRAPH_ORIENTATIONS.indexOf(orientation) === -1) {
+      throw new Error(
+        'sentenceMermaidGraph: invalid orientation "' + orientation +
+          '" (expected one of ' + VALID_GRAPH_ORIENTATIONS.join(', ') + ')'
+      );
+    }
+    if (!tokenSlice || tokenSlice.length === 0) {
+      throw new Error('sentenceMermaidGraph: token slice is empty');
+    }
+
+    // Map each token's (context, id) to a synthetic, always-unique node
+    // id: a sentence's tokens can span more than one context, and a
+    // token's own `id` is only guaranteed unique *within* its context,
+    // so plain token ids could collide across contexts.
+    var nodeIdByKey = new Map();
+    tokenSlice.forEach(function (token, i) {
+      nodeIdByKey.set(tokenKey(token.context, token.id), 'n' + i);
+    });
+
+    var nodeLines = [];
+    var edgeLines = [];
+
+    tokenSlice.forEach(function (token, i) {
+      var nodeId = 'n' + i;
+      var label = sanitizeMermaidText(token.text || token.id || '');
+      nodeLines.push(nodeId + '["' + label + '"]');
+
+      [['related1', 'relationship1'], ['related2', 'relationship2']].forEach(function (pair) {
+        var relatedId = (token[pair[0]] || '').trim();
+        if (relatedId === '') {
+          return;
+        }
+        var targetNodeId = nodeIdByKey.get(tokenKey(token.context, relatedId));
+        if (!targetNodeId) {
+          return; // doesn't resolve to a token in this sentence; skip it
+        }
+        var relationship = (token[pair[1]] || '').trim();
+        var arrow = relationship ? '-->|' + sanitizeMermaidEdgeLabel(relationship) + '|' : '-->';
+        edgeLines.push(nodeId + ' ' + arrow + ' ' + targetNodeId);
+      });
+    });
+
+    var body = nodeLines.concat(edgeLines)
+      .map(function (line) { return '  ' + line; })
+      .join('\n');
+
+    return 'graph ' + orientation + '\n' + body + '\n';
+  }
+
+  // ---------------------------------------------------------------------
 
   var ArsGrammatica = {
     splitBlocks: splitBlocks,
@@ -363,7 +458,9 @@
     tokensForSentence: tokensForSentence,
     sentenceText: sentenceText,
     sentenceLabel: sentenceLabel,
-    defaultNoSpaceBefore: defaultNoSpaceBefore
+    defaultNoSpaceBefore: defaultNoSpaceBefore,
+    sentenceMermaidGraph: sentenceMermaidGraph,
+    validGraphOrientations: VALID_GRAPH_ORIENTATIONS.slice()
   };
 
   global.ArsGrammatica = ArsGrammatica;

@@ -136,6 +136,49 @@ the source text; see the two-context sentence in
   future version should special-case trailing punctuation, that's a
   deliberate change to make there, not an oversight here.
 
+### Rendering a sentence's dependency relations as a graph
+
+- `ArsGrammatica.sentenceMermaidGraph(tokenSlice, {orientation='BT'})` —
+  builds a complete [Mermaid](https://mermaid.js.org/) `graph` definition
+  (a flowchart-family diagram) from a sentence's tokens, using the
+  `related1`/`relationship1` and `related2`/`relationship2` columns:
+  - Every token becomes a node, labelled with its `text` (so tokens with
+    no relations of their own, like punctuation, still show up as
+    isolated nodes rather than being silently dropped).
+  - `relatedN` names another token's `id`; an edge is drawn from the
+    token to that target, labelled with `relationshipN`.
+  - Because a token's `id` is only guaranteed unique *within its own
+    `context`* (see the format's own rules, above), a `relatedN` value
+    is resolved by pairing it with the *token's own* `context` — not
+    the sentence's overall context — before looking it up. One
+    consequence, seen in `test/sample-analysis.cex`'s second sentence:
+    when a sentence spans two contexts, a token in the second context
+    cannot name a relation to a token in the first (there's no way to
+    express that with a bare id), so such a sentence's graph can end up
+    with more than one disconnected component. That's a limitation of
+    the file format itself, not something this function works around.
+  - A `relatedN` value that doesn't resolve to any token in the slice at
+    all (for example, the `"root"` sentinel arsgrammatica's own
+    documentation shows being used in a token's own `related1` field to
+    flag it as the sentence's syntactic root, rather than pointing at
+    another token) is simply skipped — no edge and no fabricated `root`
+    node are created for it.
+  - `orientation` must be one of `"TB"`, `"BT"` (the default — root/verb
+    typically ends up near the bottom), `"LR"`, `"RL"` — the full list is
+    also exposed as `ArsGrammatica.validGraphOrientations`, so an app can
+    build a picker from it instead of hardcoding the list.
+  - Node and edge label text is escaped (quotes, backslashes, and, in
+    edge labels, the `|` delimiter itself) so a stray character in the
+    source data can't corrupt the diagram syntax.
+
+  This function only ever returns Mermaid *source text* — it doesn't
+  render anything itself, so it has no dependency on Mermaid (or any
+  other library) and is just as reusable in a context that never wants
+  to draw a picture (e.g. exporting the definition to paste into a
+  Markdown file elsewhere). `apps/sentence-explorer` is what actually
+  renders it, using a vendored copy of Mermaid — see
+  notes/sentence-explorer-app.md.
+
 ## Testing
 
 `test/run.js` is a small, dependency-free Node test file (uses only

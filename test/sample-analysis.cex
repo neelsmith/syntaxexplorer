@@ -5,7 +5,20 @@
 // https://neelsmith.github.io/arsgrammatica/reference/analysisformat.html
 //
 // Sentence 1: "Arma virumque cano." (5 tokens: arma / virum / que / cano / .)
-// Sentence 2: "Troiae qui primus ab oris Italiam fato profugus Laviniaque venit litora." (long, >4 tokens, to test menu truncation)
+//   - single context; also exercises the "root" sentinel (cano's own
+//     related1/relationship1 mark it as the sentence's root verb, not
+//     an edge to another token) and an enclitic ("que") with two edges.
+//
+// Sentence 2: "Troiae qui primus ab oris Italiam fato profugus Laviniaque
+//   venit litora." (trimmed here to 6 tokens, to test menu truncation),
+//   spanning two contexts (1.2, 1.3). Because a token's `related1`/
+//   `related2` is only a bare id (unique only *within* its own context),
+//   a token can only name a relation to another token in its *own*
+//   context; ab->oris (both in 1.3) is representable this way, but
+//   nothing in 1.3 can point back to the sentence's root ("primus", in
+//   1.2) — that's a real limitation of the format for sentences that
+//   cross a context boundary, not a bug in the library. See
+//   notes/library-api.md.
 
 #!sentences
 context_begin|first_token|context_end|last_token
@@ -23,6 +36,6 @@ urn:cts:latinLit:phi0690.phi003.omar:1.2|t0|lexical|Troiae|Troia||t2|place from 
 urn:cts:latinLit:phi0690.phi003.omar:1.2|t1|lexical|qui|qui||t2|subject|||
 urn:cts:latinLit:phi0690.phi003.omar:1.2|t2|lexical|primus|primus|t2|root|unit verb||
 urn:cts:latinLit:phi0690.phi003.omar:1.3|t0|lexical|ab|ab||t1|preposition|||
-urn:cts:latinLit:phi0690.phi003.omar:1.3|t1|lexical|oris|ora||t2|place from which|||
-urn:cts:latinLit:phi0690.phi003.omar:1.3|t2|lexical|Italiam|Italia||t2|place to which|||
+urn:cts:latinLit:phi0690.phi003.omar:1.3|t1|lexical|oris|ora||||||
+urn:cts:latinLit:phi0690.phi003.omar:1.3|t2|lexical|Italiam|Italia||||||
 urn:cts:latinLit:phi0690.phi003.omar:1.3|t3|punctuation|.|.||||||

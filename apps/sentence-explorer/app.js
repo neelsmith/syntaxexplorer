@@ -3,12 +3,18 @@
  *
  * Wires up the page in index.html to the reusable js/lib/*.js library:
  * reads a locally-selected arsgrammatica analysis file, builds a menu
- * of its sentences, and shows the "black text" view of whichever
- * sentence the user selects.
+ * of its sentences, shows the "black text" view of whichever sentence
+ * the user selects, and renders that sentence's dependency relations
+ * as a pannable, zoomable Mermaid graph.
  *
  * This file is intentionally app-specific (DOM wiring only); all of
- * the file-format and text-rendering logic lives in js/lib/, so it can
- * be reused by other apps without pulling in this file.
+ * the file-format, text-rendering, and graph-building logic lives in
+ * js/lib/, so it can be reused by other apps without pulling in this
+ * file. Mermaid (js/vendor/mermaid/) and svg-pan-zoom
+ * (js/vendor/svg-pan-zoom/) are only needed here, for actually drawing
+ * and navigating the graph ArsGrammatica.sentenceMermaidGraph describes
+ * as plain text. See notes/sentence-explorer-app.md for why both are
+ * vendored rather than loaded from a CDN.
  */
 (function () {
   'use strict';
@@ -18,10 +24,22 @@
   var explorerEl = document.getElementById('explorer');
   var menuEl = document.getElementById('sentence-menu');
   var viewEl = document.getElementById('sentence-view');
+  var orientationEl = document.getElementById('graph-orientation');
+  var graphViewEl = document.getElementById('graph-view');
 
   var tokens = [];
   var sentences = [];
   var tokenIndex = null;
+  var currentSlice = null; // token slice for the currently-selected sentence, if any
+  var graphRenderCount = 0; // also doubles as a token to discard stale async renders
+  var panZoomInstance = null;
+
+  if (typeof mermaid !== 'undefined') {
+    // useMaxWidth: false lets each diagram render at its own natural
+    // size (however large that is) instead of being squeezed to fit
+    // the container's width; svg-pan-zoom is what makes that navigable.
+    mermaid.initialize({ startOnLoad: false, flowchart: { useMaxWidth: false } });
+  }
 
   function setStatus(message, isError) {
     statusEl.textContent = message;
@@ -32,6 +50,14 @@
     }
   }
 
+  function clearGraph() {
+    if (panZoomInstance) {
+      panZoomInstance.destroy();
+      panZoomInstance = null;
+    }
+    graphViewEl.innerHTML = '';
+  }
+
   fileInput.addEventListener('change', function (evt) {
     var file = evt.target.files && evt.target.files[0];
     if (!file) {
@@ -40,6 +66,8 @@
 
     explorerEl.hidden = true;
     viewEl.textContent = '';
+    clearGraph();
+    currentSlice = null;
     setStatus('Reading ' + file.name + ' …', false);
 
     var reader = new FileReader();
@@ -96,11 +124,15 @@
     });
     menuEl.selectedIndex = -1;
     viewEl.textContent = '';
+    clearGraph();
+    currentSlice = null;
   }
 
   menuEl.addEventListener('change', function () {
     if (menuEl.selectedIndex < 0) {
       viewEl.textContent = '';
+      clearGraph();
+      currentSlice = null;
       return;
     }
     var i = Number(menuEl.value);
@@ -108,10 +140,78 @@
     try {
       var slice = ArsGrammatica.tokensForSentence(tokens, sentence, tokenIndex);
       viewEl.textContent = ArsGrammatica.sentenceText(slice);
+      currentSlice = slice;
+      renderGraph(slice);
     } catch (err) {
       viewEl.textContent = '';
+      clearGraph();
+      currentSlice = null;
       setStatus('Error displaying sentence ' + (i + 1) + ': ' + err.message, true);
       console.error(err);
     }
   });
+
+  orientationEl.addEventListener('change', function () {
+    if (currentSlice) {
+      renderGraph(currentSlice);
+    }
+  });
+
+  function renderGraph(slice) {
+    if (typeof mermaid === 'undefined') {
+      clearGraph();
+      setStatus('Mermaid did not load, so the dependency graph cannot be drawn.', true);
+      return;
+    }
+
+    var definition;
+    try {
+      definition = ArsGrammatica.sentenceMermaidGraph(slice, { orientation: orientationEl.value });
+    } catch (err) {
+      clearGraph();
+      setStatus('Error building the graph: ' + err.message, true);
+      console.error(err);
+      return;
+    }
+
+    var renderToken = ++graphRenderCount;
+    var renderId = 'sentence-graph-' + renderToken;
+
+    mermaid.render(renderId, definition).then(function (result) {
+      if (renderToken !== graphRenderCount) {
+        return; // a newer render (different sentence/orientation) has since started
+      }
+      if (panZoomInstance) {
+        panZoomInstance.destroy();
+        panZoomInstance = null;
+      }
+      graphViewEl.innerHTML = result.svg;
+      attachPanZoom();
+    }, function (err) {
+      if (renderToken !== graphRenderCount) {
+        return;
+      }
+      clearGraph();
+      setStatus('Error rendering the graph: ' + (err && err.message ? err.message : err), true);
+      console.error(err);
+    });
+  }
+
+  function attachPanZoom() {
+    if (typeof svgPanZoom === 'undefined') {
+      return; // graph still displays, just without pan/zoom controls
+    }
+    var svgEl = graphViewEl.querySelector('svg');
+    if (!svgEl) {
+      return;
+    }
+    panZoomInstance = svgPanZoom(svgEl, {
+      zoomEnabled: true,
+      controlIconsEnabled: true,
+      fit: true,
+      center: true,
+      minZoom: 0.2,
+      maxZoom: 25
+    });
+  }
 })();

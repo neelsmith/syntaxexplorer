@@ -29,10 +29,11 @@
     color: var(--fg);
     margin: 0;
     padding: 1.5rem;
-    max-width: 900px;
+    max-width: 1100px;
     margin-inline: auto;
   }
   h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0 0 0.35rem 0; color: var(--muted); font-weight: 600; }
   .subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 0; }
   .file-row {
     display: flex;
@@ -90,6 +91,68 @@
     font-size: 0.9rem;
     color: var(--muted);
   }
+  .graph-section {
+    margin-top: 1.5rem;
+  }
+  .graph-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .graph-controls label {
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
+  #graph-orientation {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--fg);
+    padding: 0.2rem 0.4rem;
+  }
+  .graph-hint {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin: 0 0 0.5rem 0;
+  }
+  #graph-view {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--accent);
+    height: 60vh;
+    min-height: 320px;
+  }
+  #graph-view:empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: auto;
+    min-height: 4rem;
+    padding: 1rem;
+  }
+  #graph-view:empty::before {
+    content: "Select a sentence to see its dependency graph here.";
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  /* The graph is rendered at its natural (possibly large) size and made
+     navigable by svg-pan-zoom, rather than shrunk to fit — see
+     notes/sentence-explorer-app.md. overflow: hidden because
+     svg-pan-zoom manages panning itself via an SVG transform; native
+     scrollbars would just fight it. */
+  #graph-view svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: hidden;
+  }
 </style>
 </head>
 <body>
@@ -107,8 +170,23 @@
       <select id="sentence-menu" size="18"></select>
     </div>
     <div>
-      <label for="sentence-view">Sentence text</label>
+      <h2>Sentence text</h2>
       <div id="sentence-view"></div>
+
+      <div class="graph-section">
+        <div class="graph-controls">
+          <h2 style="margin:0;">Dependency graph</h2>
+          <label for="graph-orientation">Orientation</label>
+          <select id="graph-orientation">
+            <option value="BT" selected>Bottom-to-top (BT)</option>
+            <option value="TB">Top-to-bottom (TB)</option>
+            <option value="LR">Left-to-right (LR)</option>
+            <option value="RL">Right-to-left (RL)</option>
+          </select>
+        </div>
+        <p class="graph-hint">Scroll or pinch to zoom, drag to pan, or use the +/&minus;/reset buttons in the corner.</p>
+        <div id="graph-view"></div>
+      </div>
     </div>
   </div>
 
@@ -117,9 +195,16 @@
     directly from disk (a file:// URL) with no web server, and lets
     js/lib/*.js be dropped into other apps unchanged. See
     notes/library-api.md and notes/sentence-explorer-app.md.
+
+    js/vendor/mermaid/ and js/vendor/svg-pan-zoom/ are vendored copies
+    of Mermaid's and svg-pan-zoom's UMD builds (see the LICENSE file in
+    each) so the graph renders and can be panned/zoomed with no network
+    access and no build step, the same as the rest of the app.
   -->
   <script src="../../js/lib/cts-urn.js"></script>
   <script src="../../js/lib/arsgrammatica.js"></script>
+  <script src="../../js/vendor/mermaid/mermaid.min.js"></script>
+  <script src="../../js/vendor/svg-pan-zoom/svg-pan-zoom.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
